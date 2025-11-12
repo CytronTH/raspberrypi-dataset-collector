@@ -1,0 +1,287 @@
+
+import cv2
+import time
+import pathlib
+import os
+from picamera2 import Picamera2, Preview
+from picamera2.encoders import H264Encoder, Quality
+from picamera2.outputs import FileOutput
+from libcamera import controls
+from threading import Thread, Event
+import sys
+import traceback
+
+
+
+class CameraBase:
+    def __init__(self, path, friendly_name):
+        self.path = path
+        self.friendly_name = friendly_name
+        self.thread = None
+        self.frame = None
+        self.is_running = False
+        self.ready_event = Event()
+
+    def start(self):
+        self.is_running = True
+        self.ready_event.clear()
+        print(f"[CameraBase {self.path}] Starting capture thread.", file=sys.stderr)
+        self.thread = Thread(target=self._capture_loop, daemon=True)
+        self.thread.start()
+
+    def stop(self):
+        self.is_running = False
+        if self.thread:
+            self.thread.join()
+
+    def get_frame(self):
+        return self.frame
+
+    def capture_still(self):
+        """Signals the capture loop to capture a fresh frame and waits for it."""
+        if not self.is_running or not self.picam2:
+            return None
+
+        # Forcefully re-apply the manual focus settings right before capture.
+        # This is to combat any background process that might be changing the focus.
+        print(f"[PiCamera] Forcing manual focus to {self._manual_focus_value} before capture.", file=sys.stderr)
+        self.picam2.set_controls({
+            "AfMode": controls.AfModeEnum.Manual, 
+            "LensPosition": self._manual_focus_value
+        })
+        # Give it a tiny moment to apply.
+        time.sleep(0.1)
+
+        self.frame_captured.clear()
+        self.capture_requested.set()
+        
+        # Wait for the background thread to capture the frame
+        if self.frame_captured.wait(timeout=2.0): # 2-second timeout
+            return self.captured_frame
+        else:
+            print("[PiCamera] Warning: Timed out waiting for still frame. Returning last streaming frame.", file=sys.stderr)
+            return self.frame # Fallback to the streaming frame on timeout
+
+    def autofocus_and_capture(self):
+        if self.picam2 and self._has_autofocus:
+            print("Starting autofocus cycle...", file=sys.stderr)
+            if self.picam2.autofocus_cycle():
+                print("Autofocus successful.", file=sys.stderr)
+            else:
+                print("Autofocus failed.", file=sys.stderr)
+        return self.picam2.capture_array()
+
+    def set_resolution(self, width, height):
+        raise NotImplementedError()
+
+
+
+    def set_shutter_speed(self, shutter_speed):
+        raise NotImplementedError()
+
+
+    def _capture_loop(self):
+        raise NotImplementedError()
+
+    def __repr__(self):
+        return f"<{self.__class__.__name__} {self.friendly_name}>"
+
+class USBCamera(CameraBase):
+    """Handler for USB webcams using OpenCV."""
+    def __init__(self, path, friendly_name):
+        super().__init__(path, friendly_name)
+        self.cap = None
+        self.width = 1280
+        self.height = 720
+
+    def set_resolution(self, width, height):
+        # No need to change if resolution is the same and it's running
+        if self.width == width and self.height == height and self.is_running:
+            return
+
+        self.width = width
+        self.height = height
+
+        print(f"[USBCamera {self.path}] Setting resolution to {width}x{height}", file=sys.stderr)
+
+        if self.is_running:
+            print(f"[USBCamera {self.path}] Camera is running, stopping it first.", file=sys.stderr)
+            self.stop()
+            # Give the OS and camera driver a moment to release the device
+            time.sleep(0.5) 
+
+        print(f"[USBCamera {self.path}] Starting camera.", file=sys.stderr)
+        self.start()
+        
+        # Wait for the camera thread to signal that it's ready
+        if not self.ready_event.wait(timeout=10):
+            print(f"[USBCamera {self.path}] WARNING: Camera did not become ready after resolution change.", file=sys.stderr)
+
+    def set_shutter_speed(self, shutter_speed):
+        # Most USB cameras don't support programmatic shutter speed control via OpenCV
+        pass
+
+    def _capture_loop(self):
+        print(f"[USBCamera {self.path}] _capture_loop started for {self.width}x{self.height}.", file=sys.stderr)
+        try:
+            self.cap = cv2.VideoCapture(self.path)
+            if not self.cap.isOpened():
+                print(f"[USBCamera {self.path}] Error: Could not open camera.", file=sys.stderr)
+                self.is_running = False
+                return
+
+            # Set pixel format to MJPG for high resolutions
+            fourcc = cv2.VideoWriter_fourcc(*'MJPG')
+            self.cap.set(cv2.CAP_PROP_FOURCC, fourcc)
+
+            # Set the resolution
+            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
+            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
+
+            # Verify the resolution
+            actual_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            actual_height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+            if actual_width != self.width or actual_height != self.height:
+                print(f"[USBCamera {self.path}] WARNING: Failed to set resolution to {self.width}x{self.height}. Actual resolution is {actual_width}x{actual_height}", file=sys.stderr)
+                # Update internal state to what the camera is actually using
+                self.width = actual_width
+                self.height = actual_height
+
+            print(f"[USBCamera {self.path}] Camera started with resolution {self.width}x{self.height}.", file=sys.stderr)
+            self.ready_event.set()
+
+        except Exception as e:
+            print(f"Error in USBCamera _capture_loop: {e}", file=sys.stderr)
+            traceback.print_exc(file=sys.stderr)
+            self.is_running = False
+            return
+
+        while self.is_running:
+            ret, frame = self.cap.read()
+            if not ret:
+                print(f"[USBCamera {self.path}] Failed to capture frame.", file=sys.stderr)
+                time.sleep(0.1)
+                continue
+            self.frame = frame
+            time.sleep(0.01)
+        
+        print(f"[USBCamera {self.path}] _capture_loop stopped.", file=sys.stderr)
+        if self.cap:
+            self.cap.release()
+
+
+
+class PiCamera(CameraBase):
+    """A simplified, non-threaded handler for the Raspberry Pi Camera Module."""
+    def __init__(self, camera_id, friendly_name, max_width, max_height):
+        super().__init__(path=f"pi_{camera_id}", friendly_name=friendly_name)
+        self.camera_id = camera_id
+        self.friendly_name = friendly_name
+        self.picam2 = Picamera2(self.camera_id)
+        self.width = 1280
+        self.height = 720
+        self.max_width = max_width
+        self.max_height = max_height
+        self._autofocus_enabled = True
+        self._manual_focus_value = 0.0
+        self._shutter_speed = 0
+        self._has_autofocus = False
+        self.is_running = False
+
+    def start(self):
+        if self.is_running:
+            return
+        config = self.picam2.create_video_configuration(main={"size": (self.width, self.height)})
+        self.picam2.configure(config)
+        self.picam2.start()
+        self.picam2.set_overlay(None)
+        self.is_running = True
+        self._has_autofocus = "AfMode" in self.picam2.camera_controls
+        # Apply initial control settings
+        if self._has_autofocus:
+            self.set_autofocus(self._autofocus_enabled)
+        self.set_shutter_speed(self._shutter_speed)
+        print(f"[PiCamera {self.camera_id}] Camera started.", file=sys.stderr)
+
+    def stop(self):
+        if not self.is_running:
+            return
+        print(f"[PiCamera {self.camera_id}] Stopping camera.", file=sys.stderr)
+        self.picam2.stop()
+        self.is_running = False
+
+    def set_resolution(self, width, height):
+        if self.width == width and self.height == height:
+            return
+        self.width = width
+        self.height = height
+        if self.is_running:
+            self.stop()
+            self.start()
+
+    def set_shutter_speed(self, shutter_speed):
+        self._shutter_speed = shutter_speed
+        if self.is_running and "AeEnable" in self.picam2.camera_controls:
+            if shutter_speed == 0:
+                self.picam2.set_controls({"AeEnable": True})
+            else:
+                self.picam2.set_controls({"AeEnable": False, "ExposureTime": shutter_speed})
+
+    def set_autofocus(self, enable: bool):
+        self._autofocus_enabled = enable
+        if self.is_running and self._has_autofocus:
+            if enable:
+                self.picam2.set_controls({"AfMode": controls.AfModeEnum.Continuous})
+            else:
+                # Get the current lens position from the metadata
+                metadata = self.picam2.capture_metadata()
+                current_pos = metadata.get("LensPosition", 0.0)
+                
+                # Lock the focus at the current position
+                self.picam2.set_controls({"AfMode": controls.AfModeEnum.Manual, "LensPosition": current_pos})
+                
+                # Update our internal state to match
+                self._manual_focus_value = current_pos
+                print(f"[PiCamera] Autofocus OFF. Focus locked at {current_pos:.2f}", file=sys.stderr)
+
+    def set_manual_focus(self, focus_value: float):
+        self._autofocus_enabled = False
+        self._manual_focus_value = focus_value
+        if self.is_running and self._has_autofocus:
+            self.picam2.set_controls({"AfMode": controls.AfModeEnum.Manual, "LensPosition": focus_value})
+
+    def capture_array(self):
+        """Captures a single frame. Renamed from capture_still for clarity."""
+        if not self.is_running:
+            return None
+        return self.picam2.capture_array()
+
+    def autofocus_and_capture(self):
+        if self.picam2 and self._has_autofocus:
+            print("Starting autofocus cycle...", file=sys.stderr)
+            self.picam2.autofocus_cycle()
+        return self.capture_array()
+def detect_cameras():
+    print("--- DETECTING PI CAMERAS ---", file=sys.stderr)
+    cameras = {}
+    try:
+        pi_cameras = Picamera2.global_camera_info()
+        if pi_cameras:
+            for i, info in enumerate(pi_cameras):
+                print(f"Pi camera info: {info}", file=sys.stderr) # Debug print
+                cam_id = info['Num']
+                cam_name = f"PiCamera {cam_id} ({info.get('Model', 'Unknown')})"
+                max_width, max_height = info.get('PixelArraySize', (4608, 2592)) # Use .get() for safety
+                cameras[f"pi_{cam_id}"] = {
+                    "friendly_name": cam_name, 
+                    "type": "pi", 
+                    "path": cam_id,
+                    "max_width": max_width,
+                    "max_height": max_height
+                }
+    except Exception as e:
+        print(f"Error in detect_cameras (pi): {e}", file=sys.stderr)
+            
+    print(f"Detected cameras: {cameras}", file=sys.stderr)
+    return cameras

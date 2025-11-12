@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Data Collector</title>
+    <link rel="stylesheet" href="/static/css/style.css?v=1.0">
+</head>
+<body>
+
+    <div class="header">
+        <h1>Data Collector</h1>
+        <div class="toggle-container">
+            <label class="switch">
+                <input type="checkbox" id="view-toggle-checkbox">
+                <span class="slider round"></span>
+            </label>
+            <span class="toggle-label">Single / Multi-Camera</span>
+        </div>
+    </div>
+        
+
+        <div class="main-content">
+            <div class="camera-view">
+                <div class="camera-feed-container">
+                    <img id="camera-feed" src="/static/images/placeholder.svg" alt="Camera Feed">
+                </div>
+                <div id="resolution-display"></div>
+
+                <div id="log-area-container">
+                    <h3>Log</h3>
+                    <div id="log-area"></div>
+                </div>
+            </div>
+
+            <div class="controls">
+                <h2>Controls</h2>
+                
+                <div class="control-group">
+                    <label for="camera-select">Select Camera:</label>
+                    <select id="camera-select" name="camera">
+                        <!-- Camera options will be populated by JavaScript -->
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <label for="resolution-select">Resolution:</label>
+                    <select id="resolution-select" name="resolution">
+                        <!-- Resolution options will be populated by JavaScript -->
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <label for="shutter-speed-select">Speed Shutter:</label>
+                    <select id="shutter-speed-select" name="shutter-speed">
+                        <option value="Auto">Auto</option>
+                        <option value="1/30s">1/30s</option>
+                        <option value="1/60s">1/60s</option>
+                        <option value="1/125s">1/125s</option>
+                        <option value="1/250s">1/250s</option>
+                        <option value="1/500s">1/500s</option>
+                        <option value="1/1000s">1/1000s</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <label for="autofocus-checkbox">Autofocus (PiCamera only):</label>
+                    <input type="checkbox" id="autofocus-checkbox" name="autofocus" checked>
+                </div>
+
+                <div class="control-group">
+                    <label for="manual-focus-slider">Manual Focus (PiCamera only):</label>
+                    <input type="range" id="manual-focus-slider" name="manual-focus" min="0" max="1000" value="0">
+                    <span id="manual-focus-value">0.0</span>
+                </div>
+
+                <div class="control-group">
+                    <label for="subfolder-input">Subfolder Name (for storage):</label>
+                    <input type="text" id="subfolder-input" name="subfolder" value="default">
+                </div>
+
+                <div class="control-group">
+                    <label for="prefix-input">File Prefix:</label>
+                    <input type="text" id="prefix-input" name="prefix" value="IMG">
+                </div>
+
+                <div class="control-group">
+                    <button id="capture-image-btn">Capture Image</button>
+                </div>
+
+                <div class="control-group">
+                    <a href="/editor" class="button">Edit Config</a>
+                </div>
+
+                <div class="control-group">
+                    <label for="delay-timer-checkbox">Delay Timer:</label>
+                    <input type="checkbox" id="delay-timer-checkbox" name="delay-timer">
+                    <input type="number" id="delay-timer-input" name="delay-seconds" min="1" value="3" disabled>
+                    <span>seconds</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/script.js?v=1.1"></script>
+</body>
+</html>

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Config Editor</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/editor.css">
+</head>
+<body class="editor-page">
+    <div class="container">
+        <h1>Camera Config Editor</h1>
+
+        <textarea id="config-editor"></textarea>
+
+        <div class="button-container">
+            <button id="save-btn">Save</button>
+        </div>
+        <div class="button-container">
+             <a href="/" class="button">Back to Single Camera View</a>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const editor = document.getElementById('config-editor');
+            const saveBtn = document.getElementById('save-btn');
+
+            async function loadConfig() {
+                try {
+                    const response = await fetch(`/api/config`);
+                    const config = await response.text();
+                    editor.value = config;
+                } catch (error) {
+                    console.error(`Error fetching config:`, error);
+                    editor.value = "Error loading config.";
+                }
+            }
+
+            saveBtn.addEventListener('click', async () => {
+                const updatedConfig = editor.value;
+                try {
+                    const response = await fetch(`/api/config`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/yaml' },
+                        body: updatedConfig,
+                    });
+                    if (response.ok) {
+                        alert('Config saved successfully!');
+                    } else {
+                        alert('Error saving config.');
+                    }
+                } catch (error) {
+                    console.error('Error saving config:', error);
+                    alert('Error saving config.');
+                }
+            });
+
+            await loadConfig();
+        });
+    </script>
+</body>
+</html>

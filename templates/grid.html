@@ -1,0 +1,50 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Camera Grid View</title>
+    <link rel="stylesheet" href="/static/css/style.css?v=1.6">
+</head>
+<body>
+    <div class="header">
+        <h1>Multi-Camera Grid View</h1>
+    </div>
+    <div class="toggle-container">
+        <label class="switch">
+            <input type="checkbox" id="view-toggle-checkbox" checked>
+            <span class="slider round"></span>
+        </label>
+        <span class="toggle-label">Single / Multi-Camera</span>
+    </div>
+
+    <div class="top-container">
+        <div class="controls">
+            <div class="control-group">
+                <label for="prefix-input">Prefix:</label>
+                <input type="text" id="prefix-input" name="prefix" value="IMG">
+            </div>
+            <div class="control-group">
+                <label for="delay-timer-checkbox">Delay Timer:</label>
+                <input type="checkbox" id="delay-timer-checkbox" name="delay-timer">
+                <input type="number" id="delay-timer-input" name="delay-seconds" min="1" value="3" disabled>
+                <span>seconds</span>
+            </div>
+            <button id="capture-all-btn">Capture All</button>
+        </div>
+    </div>
+
+    <div id="camera-grid" class="camera-grid">
+        <p class="no-cameras">Detecting cameras...</p>
+    </div>
+
+    <div id="log-area-container">
+        <h3>Log</h3>
+        <div id="log-area"></div>
+    </div>
+
+    <script src="/static/js/script.js?v=1.6"></script>
+    <script src="/static/js/grid.js?v=1.6"></script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+PyYAML
+fastapi
+uvicorn
+opencv-python
+piexif
+picamera2

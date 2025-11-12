@@ -1,0 +1,60 @@
+
+.profile-explorer {
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.profile-explorer label {
+    font-weight: bold;
+}
+
+.profile-explorer select {
+    padding: 8px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+}
+
+.profile-explorer button {
+    padding: 8px 12px;
+}
+
+/* Editor page specific styles */
+body.editor-page {
+    height: 100vh;
+    margin: 0;
+    padding: 20px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+}
+
+body.editor-page .container {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    max-width: 1200px;
+    width: 100%;
+    margin: 0 auto;
+}
+
+body.editor-page #config-editor {
+    flex-grow: 1;
+    resize: none;
+    width: 100%;
+    box-sizing: border-box;
+    font-family: monospace;
+    border: 1px solid #ccc;
+    padding: 10px;
+    border-radius: 4px;
+}
+
+body.editor-page .button-container {
+    margin-top: 10px;
+    flex-shrink: 0;
+}
