@@ -1,6 +1,8 @@
-PyYAML
 fastapi
-uvicorn
-opencv-python
+uvicorn[standard]
+jinja2
+opencv-python-headless
 piexif
-picamera2
+pyyaml
+paho-mqtt>=2.0.0
+pydantic

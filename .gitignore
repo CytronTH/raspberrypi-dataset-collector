@@ -1,19 +1,23 @@
+__pycache__/
+*.py[cod]
+*$py.class
+
 # Virtual Environment
 venv/
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
+env/
+.env
 
-# Build artifacts
-build/
-dist/
-*.egg-info/
-
-# IDE files
+# Editor directories
 .vscode/
 .idea/
 
-# OS-specific files
+# Application Data and Config
+captures/
+camera_config.yaml
+mqtt_config.json
+release/
+*.log
+
+# OS
 .DS_Store
 Thumbs.db

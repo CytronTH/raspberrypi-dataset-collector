@@ -1,52 +1,213 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Config Editor</title>
-    <link rel="stylesheet" href="/static/css/style.css">
-    <link rel="stylesheet" href="/static/css/editor.css">
-</head>
-<body class="editor-page">
-    <div class="container">
-        <h1>Camera Config Editor</h1>
+{% extends "base.html" %}
 
-        <textarea id="config-editor"></textarea>
+{% block title %}Config Editor - Dataset Collector{% endblock %}
 
-        <div class="button-container">
-            <button id="save-btn">Save</button>
-        </div>
-        <div class="button-container">
-             <a href="/" class="button">Back to Single Camera View</a>
-        </div>
+{% block content %}
+<style>
+    #config-editor {
+        width: 100%;
+        min-height: 400px;
+        resize: vertical;
+        font-family: monospace;
+    }
+</style>
+<div class="container">
+    <h1>Camera Config Editor</h1>
+
+    <textarea id="config-editor"></textarea>
+    <div class="mt-4 text-right">
+        <button id="save-btn"
+            class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-4 rounded transition duration-200">
+            Save Config
+        </button>
     </div>
 
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+        <div class="status-box" style="margin-top: 0; margin-bottom: 0;">
+            <h2>Detected Physical Cameras</h2>
+            <p>Use this information to correctly fill in the `path` and other details in the YAML config above.</p>
+            <ul id="detected-cameras-list">
+                <li>Loading...</li>
+            </ul>
+        </div>
+
+        <!-- MQTT Settings Section -->
+        <div class="bg-gray-800 rounded-xl shadow-lg p-5 h-full">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold text-white">MQTT Settings</h2>
+                <div class="flex items-center space-x-3">
+                    <span id="mqtt-test-dot" class="w-3 h-3 rounded-full bg-gray-500 transition-colors duration-300"
+                        title="Not Tested"></span>
+                    <button type="button" id="test-mqtt-btn"
+                        class="text-sm bg-gray-700 hover:bg-gray-600 text-white py-1 px-3 rounded border border-gray-600 transition">
+                        Test Connection
+                    </button>
+                </div>
+            </div>
+
+            <form id="mqtt-form" class="space-y-4">
+                <!-- Broker -->
+                <div>
+                    <label for="mqtt-broker" class="block text-sm font-medium text-gray-400">Broker Address</label>
+                    <input type="text" id="mqtt-broker" placeholder="localhost"
+                        class="mt-1 block w-full pl-3 pr-3 py-2 text-gray-300 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 transition duration-150">
+                </div>
+
+                <!-- Port & Topic Grid -->
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="mqtt-port" class="block text-sm font-medium text-gray-400">Port</label>
+                        <input type="number" id="mqtt-port" placeholder="1883"
+                            class="mt-1 block w-full pl-3 pr-3 py-2 text-gray-300 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 transition duration-150">
+                    </div>
+                    <div>
+                        <label for="mqtt-topic" class="block text-sm font-medium text-gray-400">Topic</label>
+                        <input type="text" id="mqtt-topic" placeholder="capture/trigger"
+                            class="mt-1 block w-full pl-3 pr-3 py-2 text-gray-300 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 transition duration-150">
+                    </div>
+                </div>
+
+                <!-- Auth -->
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="mqtt-username" class="block text-sm font-medium text-gray-400">Username</label>
+                        <input type="text" id="mqtt-username" placeholder="Optional"
+                            class="mt-1 block w-full pl-3 pr-3 py-2 text-gray-300 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 transition duration-150">
+                    </div>
+                    <div>
+                        <label for="mqtt-password" class="block text-sm font-medium text-gray-400">Password</label>
+                        <input type="password" id="mqtt-password" placeholder="Optional"
+                            class="mt-1 block w-full pl-3 pr-3 py-2 text-gray-300 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 transition duration-150">
+                    </div>
+                </div>
+
+                <div class="pt-2">
+                    <button type="submit" id="save-mqtt-btn"
+                        class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 rounded-lg transition duration-200 border border-gray-600">
+                        Save MQTT Settings
+                    </button>
+                </div>
+            </form>
+
+            <!-- MQTT Log Box -->
+            <div class="mt-6 border-t border-gray-700 pt-4">
+                <h3 class="text-sm font-semibold text-gray-400 mb-2">MQTT Logs</h3>
+                <div id="mqtt-log-box"
+                    class="h-48 bg-gray-900 border border-gray-700 rounded-lg p-2 overflow-y-auto font-mono text-xs text-gray-300">
+                    <div class="text-gray-500 italic">Waiting for events...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endblock %}
+
+    {% block scripts %}
+    {{ super() }}
+    <script src="/static/js/script.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', async () => {
             const editor = document.getElementById('config-editor');
             const saveBtn = document.getElementById('save-btn');
+            let detectedCamerasData = {};
+            let currentConfigData = {};
 
             async function loadConfig() {
                 try {
                     const response = await fetch(`/api/config`);
-                    const config = await response.text();
-                    editor.value = config;
+                    const configText = await response.text();
+                    editor.value = configText;
+
+                    // Also fetch as JSON to check against detected cameras
+                    // Since we don't have a JSON endpoint for config, we rely on the text.
+                    // But we can fetch /api/cameras which returns the *active/available* cameras from the config.
+                    const camerasResponse = await fetch('/api/cameras');
+                    currentConfigData = await camerasResponse.json();
+
                 } catch (error) {
                     console.error(`Error fetching config:`, error);
                     editor.value = "Error loading config.";
                 }
             }
 
+            async function loadDetectedCameras() {
+                const listElement = document.getElementById('detected-cameras-list');
+                try {
+                    const response = await fetch('/api/detected_cameras');
+                    if (!response.ok) {
+                        listElement.innerHTML = '<li>Error loading detected cameras.</li>';
+                        return;
+                    }
+                    detectedCamerasData = await response.json();
+                    if (Object.keys(detectedCamerasData).length === 0) {
+                        listElement.innerHTML = '<li>No physical cameras detected.</li>';
+                        return;
+                    }
+
+                    listElement.innerHTML = ''; // Clear loading message
+                    for (const camId in detectedCamerasData) {
+                        const cam = detectedCamerasData[camId];
+                        const listItem = document.createElement('li');
+
+                        // Check if this camera is already in the config
+                        // We check if the 'path' matches any camera in the current config
+                        let isConfigured = false;
+                        for (const key in currentConfigData) {
+                            if (String(currentConfigData[key].path) === String(cam.path) && currentConfigData[key].type === cam.type) {
+                                isConfigured = true;
+                                break;
+                            }
+                        }
+                        // Also check by key if possible, but path/type is safer.
+                        // Actually, the key in detectedCamerasData (e.g. pi_0) is the default key we use.
+                        if (currentConfigData[camId]) {
+                            isConfigured = true;
+                        }
+
+                        listItem.innerHTML = `
+                        <div style="display: flex; align-items: flex-start; gap: 10px;">
+                            <input type="checkbox" id="cb-${camId}" data-cam-id="${camId}" ${isConfigured ? 'checked' : ''}>
+                            <div>
+                                <strong>${cam.friendly_name}</strong> (Logical ID: <code>${camId}</code>)
+                                <ul>
+                                    <li><strong>Required Path:</strong> <code>${cam.path}</code></li>
+                                    <li><strong>Type:</strong> <code>${cam.type}</code></li>
+                                    <li><strong>Resolutions:</strong> ${cam.resolutions.join(', ')}</li>
+                                </ul>
+                            </div>
+                        </div>
+                    `;
+                        listElement.appendChild(listItem);
+                    }
+                } catch (error) {
+                    console.error('Error fetching detected cameras:', error);
+                    listElement.innerHTML = '<li>Error loading detected cameras.</li>';
+                }
+            }
+
             saveBtn.addEventListener('click', async () => {
                 const updatedConfig = editor.value;
+
+                // Collect selected cameras
+                const selectedCameras = {};
+                for (const camId in detectedCamerasData) {
+                    const checkbox = document.getElementById(`cb-${camId}`);
+                    if (checkbox && checkbox.checked) {
+                        selectedCameras[camId] = detectedCamerasData[camId];
+                    }
+                }
+
                 try {
                     const response = await fetch(`/api/config`, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/yaml' },
-                        body: updatedConfig,
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            config: updatedConfig,
+                            selected_cameras: selectedCameras
+                        }),
                     });
                     if (response.ok) {
-                        alert('Config saved successfully!');
+                        alert('Config saved successfully! Page will reload to show updates.');
+                        window.location.reload();
                     } else {
                         alert('Error saving config.');
                     }
@@ -56,8 +217,16 @@
                 }
             });
 
-            await loadConfig();
+            try {
+                // console.log("Starting loadConfig...");
+                await loadConfig();
+                // console.log("loadConfig done. Starting loadDetectedCameras...");
+                await loadDetectedCameras();
+                // console.log("loadDetectedCameras done.");
+            } catch (e) {
+                console.error("Critical error in init:", e);
+                alert("Critical error init: " + e.message);
+            }
         });
     </script>
-</body>
-</html>
+    {% endblock %}

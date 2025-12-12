@@ -1,0 +1,14 @@
+# Camera Configuration (LITE VERSION)
+# Optimized for Raspberry Pi Zero 2 W
+
+# Default resolution (Lower to save RAM/Bandwidth)
+resolution: "1280x720"
+
+# Shutter speed ("Auto" or specific value like "1/100s")
+shutter_speed: "Auto"
+
+# Autofocus (Safe default: False for Zero 2W to save CPU cycles on startup)
+autofocus_on_startup: false
+
+# Camera Tuning File (Optional, leave empty for default)
+tuning_file: ""

@@ -1,50 +1,209 @@
+{% extends "base.html" %}
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Multi-Camera Grid View</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=1.6">
-</head>
-<body>
-    <div class="header">
-        <h1>Multi-Camera Grid View</h1>
-    </div>
-    <div class="toggle-container">
-        <label class="switch">
-            <input type="checkbox" id="view-toggle-checkbox" checked>
-            <span class="slider round"></span>
-        </label>
-        <span class="toggle-label">Single / Multi-Camera</span>
-    </div>
+{% block title %}Multi-Camera Dashboard - Dataset Collector{% endblock %}
 
-    <div class="top-container">
-        <div class="controls">
-            <div class="control-group">
-                <label for="prefix-input">Prefix:</label>
-                <input type="text" id="prefix-input" name="prefix" value="IMG">
+{% block content %}
+<style>
+    /* Ensure the preview area takes up remaining space */
+    .preview-box {
+        background-color: #000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 4px solid #3b82f6;
+        /* Blue border for focus */
+        box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+        min-height: 250px;
+        aspect-ratio: 16 / 9;
+    }
+
+    /* Styling for the focus slider thumb when autofocus is manual */
+    input[type=range]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 16px;
+        height: 16px;
+        background: #fcd34d;
+        /* Amber color */
+        border: 2px solid #000;
+        border-radius: 50%;
+        cursor: pointer;
+        box-shadow: 0 0 5px rgba(252, 211, 77, 0.8);
+        margin-top: -6px;
+        /* Center thumb on track */
+    }
+
+    input[type=range]::-moz-range-thumb {
+        width: 16px;
+        height: 16px;
+        background: #fcd34d;
+        border: 2px solid #000;
+        border-radius: 50%;
+        cursor: pointer;
+        box-shadow: 0 0 5px rgba(252, 211, 77, 0.8);
+    }
+
+    /* Track styling for better visibility */
+    input[type=range]::-webkit-slider-runnable-track {
+        width: 100%;
+        height: 4px;
+        cursor: pointer;
+        background: #4b5563;
+        border-radius: 2px;
+    }
+</style>
+
+<div class="max-w-[1600px] mx-auto p-4 md:p-8">
+    <div class="flex flex-col md:flex-row justify-between items-center mb-8 border-b border-gray-700 pb-4 gap-4">
+        <div>
+            <h1 class="text-3xl font-extrabold text-blue-400">
+                Live Multi-Camera Configuration Dashboard
+            </h1>
+            <p class="text-gray-400 mt-2">
+                Configuration updates are applied instantly.
+            </p>
+        </div>
+
+        <!-- Global Controls -->
+        <div class="flex items-center gap-4 bg-gray-800 p-4 rounded-xl shadow-lg">
+            <div>
+                <label for="prefix-input" class="block text-xs font-medium text-gray-400 mb-1">Image Prefix</label>
+                <input type="text" id="prefix-input" value="IMG"
+                    class="w-24 px-2 py-1 bg-gray-700 border border-gray-600 rounded text-sm text-white focus:ring-blue-500 focus:border-blue-500">
             </div>
-            <div class="control-group">
-                <label for="delay-timer-checkbox">Delay Timer:</label>
-                <input type="checkbox" id="delay-timer-checkbox" name="delay-timer">
-                <input type="number" id="delay-timer-input" name="delay-seconds" min="1" value="3" disabled>
-                <span>seconds</span>
+
+            <div class="flex items-center gap-2">
+                <input type="checkbox" id="delay-timer-checkbox"
+                    class="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500">
+                <label for="delay-timer-checkbox" class="text-sm text-gray-300">Delay</label>
+                <input type="number" id="delay-timer-input" value="3" min="1" disabled
+                    class="w-16 px-2 py-1 bg-gray-700 border border-gray-600 rounded text-sm text-white disabled:opacity-50">
             </div>
-            <button id="capture-all-btn">Capture All</button>
+
+            <button id="capture-all-btn"
+                class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition duration-200 shadow-md flex items-center transform hover:scale-105">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z">
+                    </path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                </svg>
+                Capture All
+            </button>
         </div>
     </div>
 
-    <div id="camera-grid" class="camera-grid">
-        <p class="no-cameras">Detecting cameras...</p>
+    <div id="cameras-container" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-8">
+        <div class="col-span-full text-center py-12">
+            <p class="text-xl text-gray-400 animate-pulse">Detecting cameras...</p>
+        </div>
     </div>
 
-    <div id="log-area-container">
-        <h3>Log</h3>
-        <div id="log-area"></div>
+    <!-- Log Area -->
+    <div class="mt-8 bg-gray-800 rounded-xl shadow-lg p-5 border border-gray-700">
+        <h2 class="text-xl font-semibold mb-4 text-white">Activity Log</h2>
+        <div id="log-area"
+            class="h-48 overflow-y-auto font-mono text-sm p-2 rounded bg-gray-900 text-gray-300 border border-gray-700">
+            <!-- Logs will appear here -->
+        </div>
     </div>
+</div>
 
-    <script src="/static/js/script.js?v=1.6"></script>
-    <script src="/static/js/grid.js?v=1.6"></script>
-</body>
-</html>
+<!-- File Explorer Modal -->
+<div id="file-explorer-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 hidden">
+    <div
+        class="bg-gray-900 rounded-xl shadow-2xl w-full max-w-2xl mx-4 border border-gray-700 flex flex-col max-h-[80vh]">
+        <!-- Modal Header -->
+        <div class="flex justify-between items-center p-4 border-b border-gray-700">
+            <h3 class="text-xl font-bold text-white">Select Save Location</h3>
+            <button id="close-explorer-btn"
+                class="text-gray-400 hover:text-white w-8 h-8 flex items-center justify-center rounded hover:bg-gray-700 transition">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12">
+                    </path>
+                </svg>
+            </button>
+        </div>
+
+        <!-- Breadcrumbs & New Folder -->
+        <div class="p-4 bg-gray-800 flex justify-between items-center border-b border-gray-700">
+            <div id="explorer-breadcrumbs" class="text-sm text-gray-300 font-mono truncate mr-4 flex-grow">/</div>
+            <button id="new-folder-btn" title="New Folder"
+                class="bg-gray-700 hover:bg-gray-600 text-white w-8 h-8 rounded text-sm flex items-center justify-center flex-shrink-0 transition">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                </svg>
+            </button>
+        </div>
+
+        <!-- File List -->
+        <div id="explorer-list" class="flex-grow overflow-y-auto p-2 space-y-1">
+            <!-- Populated by JS -->
+            <div class="text-center text-gray-500 py-8">Loading...</div>
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="p-4 border-t border-gray-700 flex justify-end gap-3 bg-gray-800 rounded-b-xl">
+            <button id="cancel-explorer-btn"
+                class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition">Cancel</button>
+            <button id="select-folder-btn"
+                class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition">Select This
+                Folder</button>
+        </div>
+    </div>
+</div>
+
+<!-- Video Popup Modal -->
+<div id="video-popup-modal"
+    class="fixed inset-0 bg-black/90 z-50 hidden flex items-center justify-center backdrop-blur-sm"
+    onclick="closeVideoPopup()">
+    <div class="relative max-w-[90vw] max-h-[90vh]" onclick="event.stopPropagation()">
+        <!-- Close Button -->
+        <button onclick="closeVideoPopup()"
+            class="absolute -top-12 right-0 text-white hover:text-blue-400 text-4xl font-bold transition duration-200"
+            title="Close">
+            &times;
+        </button>
+
+        <!-- Video Container -->
+        <div
+            class="relative rounded-lg overflow-hidden border-4 border-blue-500 shadow-[0_0_30px_rgba(59,130,246,0.6)]">
+            <img id="popup-video-feed" src="" alt="Popup Feed"
+                class="max-w-full max-h-[85vh] object-contain block bg-black">
+
+            <!-- Info Overlay -->
+            <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent pt-10 pb-4 px-6">
+                <div class="flex justify-between items-end">
+                    <div>
+                        <h3 id="popup-camera-name" class="text-white text-2xl font-bold drop-shadow-md">Camera Name</h3>
+                        <p id="popup-camera-details" class="text-blue-300 text-sm font-mono mt-1">Resolution: ... |
+                            Shutter: ...
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Focus Control (Hidden by default) -->
+                <div id="popup-focus-control" class="mt-4 hidden max-w-md">
+                    <div class="flex items-center justify-between mb-1">
+                        <label class="text-xs font-bold text-gray-400 uppercase tracking-wider">Manual Focus</label>
+                        <span id="popup-focus-value" class="text-xs font-mono text-yellow-400">0.0</span>
+                    </div>
+                    <input type="range" id="popup-focus-slider" min="0" max="1000" value="0"
+                        class="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer">
+                    <p class="text-[10px] text-gray-500 mt-1 flex justify-between">
+                        <span>Near</span>
+                        <span>Far</span>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script src="/static/js/grid.js?v=2.2"></script>
+{% endblock %}

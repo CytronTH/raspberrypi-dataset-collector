@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Dataset Collector{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/editor.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body>
+    <nav class="side-menu" id="side-menu">
+        <div class="menu-header">
+            <h2 class="menu-title"><span class="menu-text">Menu</span></h2>
+            <div class="toggle-btn" id="toggle-btn">
+                <span>&#9776;</span>
+            </div>
+        </div>
+        <ul>
+            <li>
+                <a href="/" class="{{ 'active' if active_page == 'index' else '' }}">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z">
+                        </path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    </svg>
+                    <span class="menu-text">Single Camera View</span>
+                </a>
+            </li>
+            <li>
+                <a href="/grid" class="{{ 'active' if active_page == 'grid' else '' }}">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z">
+                        </path>
+                    </svg>
+                    <span class="menu-text">Grid View</span>
+                </a>
+            </li>
+            <li>
+                <a href="/editor" class="{{ 'active' if active_page == 'editor' else '' }}">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z">
+                        </path>
+                    </svg>
+                    <span class="menu-text">Config Editor</span>
+                </a>
+            </li>
+        </ul>
+    </nav>
+
+    <div id="status-container" class="status-bar">
+        <div id="mqtt-status" class="status-item">
+            MQTT <span id="mqtt-status-dot" class="status-dot disconnected"></span>
+        </div>
+        <div id="ws-status" class="status-item">
+            WS <span id="ws-status-dot" class="status-dot disconnected"></span>
+        </div>
+    </div>
+
+    <main class="page-content" id="page-content">
+        {% block content %}{% endblock %}
+    </main>
+
+    {% block scripts %}
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // ... menu logic ...
+            // ... menu logic ...
+            const sideMenu = document.getElementById('side-menu');
+            const pageContent = document.getElementById('page-content');
+            const toggleBtn = document.getElementById('toggle-btn');
+            const menuTextSpans = document.querySelectorAll('.menu-text');
+
+            const setMenuState = (isCollapsed) => {
+                sideMenu.classList.toggle('collapsed', isCollapsed);
+                pageContent.classList.toggle('collapsed', isCollapsed);
+
+                // Hide text when collapsed, show when expanded
+                // menuTextSpans.forEach(span => {
+                //     span.style.display = isCollapsed ? 'none' : 'inline';
+                // });
+
+                localStorage.setItem('menuCollapsed', isCollapsed);
+            };
+
+            // Check for saved state in localStorage
+            const savedState = localStorage.getItem('menuCollapsed') === 'true';
+            setMenuState(savedState);
+
+            toggleBtn.addEventListener('click', () => {
+                const isCollapsed = !sideMenu.classList.contains('collapsed');
+                setMenuState(isCollapsed);
+            });
+        });
+    </script>
+    {% endblock %}
+</body>
+
+</html>

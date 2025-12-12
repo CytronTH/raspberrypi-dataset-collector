@@ -1,107 +1,373 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Image Data Collector</title>
-    <link rel="stylesheet" href="/static/css/style.css?v=1.0">
-</head>
-<body>
+{% extends "base.html" %}
 
-    <div class="header">
-        <h1>Data Collector</h1>
-        <div class="toggle-container">
-            <label class="switch">
-                <input type="checkbox" id="view-toggle-checkbox">
-                <span class="slider round"></span>
-            </label>
-            <span class="toggle-label">Single / Multi-Camera</span>
-        </div>
-    </div>
-        
+{% block title %}Single Camera View - Dataset Collector{% endblock %}
 
-        <div class="main-content">
-            <div class="camera-view">
-                <div class="camera-feed-container">
-                    <img id="camera-feed" src="/static/images/placeholder.svg" alt="Camera Feed">
+{% block content %}
+<script>
+    tailwind.config = {
+        theme: {
+            extend: {
+                colors: {
+                    'primary-dark': '#1a202c', // Gray-900
+                    'secondary-dark': '#2d3748', // Gray-800
+                    'accent-blue': '#4299e1', // Blue-500
+                    'gemini-purple': '#a855f7', // Purple-500
+                }
+            }
+        }
+    }
+</script>
+<style>
+    /* Custom scrollbar for the gallery */
+    .gallery-scroll::-webkit-scrollbar {
+        height: 6px;
+    }
+
+    .gallery-scroll::-webkit-scrollbar-thumb {
+        background-color: #4a5568;
+        /* Gray-700 */
+        border-radius: 3px;
+    }
+
+    .gallery-scroll::-webkit-scrollbar-track {
+        background-color: #2d3748;
+        /* Gray-800 */
+    }
+
+    /* Style for the main container to use the Inter font */
+    body {
+        font-family: 'Inter', sans-serif;
+    }
+</style>
+
+<div id="app" class="max-w-7xl mx-auto p-4 sm:p-8">
+
+    <header class="mb-6 pb-4 border-b border-gray-700">
+        <h1 class="text-3xl sm:text-4xl font-extrabold text-white flex items-center">
+            <svg class="w-8 h-8 mr-3 text-accent-blue" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                xmlns="http://www.w3.org/2000/svg">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z">
+                </path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+            </svg>
+            PiCam Controller
+        </h1>
+    </header>
+
+    <!-- Main Content Area: Video Preview and Controls -->
+    <main class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        <!-- Left Column: Video Preview & Logs (2/3 width) -->
+        <div class="lg:col-span-2 flex flex-col gap-6">
+
+            <!-- 1. Video Preview Area -->
+            <div class="bg-secondary-dark rounded-xl shadow-lg p-3 relative aspect-video flex flex-col">
+                <h2 class="text-lg font-semibold mb-2 text-gray-300">Live Camera Feed</h2>
+                <div id="video-preview"
+                    class="flex-grow bg-gray-900 rounded-lg overflow-hidden flex items-center justify-center relative cursor-pointer">
+                    <!-- Video Feed -->
+                    <img id="camera-feed" src="/static/images/placeholder.svg" alt="Camera Feed"
+                        class="w-full h-full object-contain">
+                    <div id="preview-status"
+                        class="absolute bottom-2 left-2 text-xs text-gray-400 bg-black bg-opacity-50 px-2 py-1 rounded">
+                        Connecting...</div>
                 </div>
-                <div id="resolution-display"></div>
+            </div>
 
-                <div id="log-area-container">
-                    <h3>Log</h3>
-                    <div id="log-area"></div>
+            <!-- Logs Area -->
+            <div class="bg-secondary-dark rounded-xl shadow-lg p-5">
+                <h2 class="text-xl font-semibold mb-4 text-white">Logs</h2>
+                <div id="log-area"
+                    class="h-48 overflow-y-auto font-mono text-sm p-2 rounded bg-gray-900 text-gray-300 border border-gray-700">
+                    <!-- Logs will appear here -->
                 </div>
             </div>
 
-            <div class="controls">
-                <h2>Controls</h2>
-                
-                <div class="control-group">
-                    <label for="camera-select">Select Camera:</label>
-                    <select id="camera-select" name="camera">
-                        <!-- Camera options will be populated by JavaScript -->
-                    </select>
-                </div>
+        </div>
 
-                <div class="control-group">
-                    <label for="resolution-select">Resolution:</label>
-                    <select id="resolution-select" name="resolution">
-                        <!-- Resolution options will be populated by JavaScript -->
-                    </select>
-                </div>
+        <!-- 2. Controls Panel (1/3 width on large screens) -->
+        <div class="lg:col-span-1 flex flex-col gap-6">
 
-                <div class="control-group">
-                    <label for="shutter-speed-select">Speed Shutter:</label>
-                    <select id="shutter-speed-select" name="shutter-speed">
-                        <option value="Auto">Auto</option>
-                        <option value="1/30s">1/30s</option>
-                        <option value="1/60s">1/60s</option>
-                        <option value="1/125s">1/125s</option>
-                        <option value="1/250s">1/250s</option>
-                        <option value="1/500s">1/500s</option>
-                        <option value="1/1000s">1/1000s</option>
-                    </select>
-                </div>
+            <!-- Capture Controls Card -->
+            <div class="bg-secondary-dark rounded-xl shadow-lg p-5">
+                <h2 class="text-xl font-semibold mb-4 text-white">Capture Actions</h2>
+                <div class="space-y-4">
 
-                <div class="control-group">
-                    <label for="autofocus-checkbox">Autofocus (PiCamera only):</label>
-                    <input type="checkbox" id="autofocus-checkbox" name="autofocus" checked>
-                </div>
+                    <!-- Take Picture Button -->
+                    <button id="capture-image-btn"
+                        class="w-full bg-accent-blue hover:bg-blue-600 text-white font-bold py-3 rounded-xl transition duration-200 shadow-md flex items-center justify-center transform hover:scale-[1.02]">
+                        <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                            xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z">
+                            </path>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                        </svg>
+                        Take Photo
+                    </button>
 
-                <div class="control-group">
-                    <label for="manual-focus-slider">Manual Focus (PiCamera only):</label>
-                    <input type="range" id="manual-focus-slider" name="manual-focus" min="0" max="1000" value="0">
-                    <span id="manual-focus-value">0.0</span>
+                    <!-- Status Indicator -->
+                    <div id="recording-status"
+                        class="hidden text-center py-2 text-sm rounded-lg bg-gray-700 text-gray-400">
+                        Ready
+                    </div>
                 </div>
+            </div>
 
-                <div class="control-group">
-                    <label for="subfolder-input">Subfolder Name (for storage):</label>
-                    <input type="text" id="subfolder-input" name="subfolder" value="default">
+            <!-- Settings/Configuration Card -->
+            <div class="bg-secondary-dark rounded-xl shadow-lg p-5">
+                <h2 class="text-xl font-semibold mb-4 text-white">Camera Settings</h2>
+                <div class="space-y-4">
+                    <!-- ... existing camera settings ... -->
+                    <!-- Camera Selector -->
+                    <div>
+                        <label for="camera-select" class="block text-sm font-medium text-gray-400">Select Camera</label>
+                        <select id="camera-select"
+                            class="mt-1 block w-full pl-3 pr-10 py-2 text-gray-300 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-accent-blue focus:border-accent-blue transition duration-150">
+                            <!-- Populated by JS -->
+                        </select>
+                    </div>
+
+                    <!-- Resolution Selector -->
+                    <div>
+                        <label for="resolution-select"
+                            class="block text-sm font-medium text-gray-400">Resolution</label>
+                        <select id="resolution-select"
+                            class="mt-1 block w-full pl-3 pr-10 py-2 text-gray-300 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-accent-blue focus:border-accent-blue transition duration-150">
+                            <!-- Populated by JS -->
+                        </select>
+                    </div>
+
+                    <!-- Shutter Speed Selector -->
+                    <div>
+                        <label for="shutter-speed-select" class="block text-sm font-medium text-gray-400">Shutter
+                            Speed</label>
+                        <select id="shutter-speed-select"
+                            class="mt-1 block w-full pl-3 pr-10 py-2 text-gray-300 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-accent-blue focus:border-accent-blue transition duration-150">
+                            <!-- Populated by JS -->
+                        </select>
+                    </div>
+
+                    <!-- Autofocus Switch & Focus Adjustment -->
+                    <div class="p-4 bg-gray-700/50 rounded-lg border border-gray-600 mb-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <label for="autofocus-checkbox" class="text-sm font-medium text-gray-400 flex items-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-yellow-400"
+                                    viewBox="0 0 20 20" fill="currentColor">
+                                    <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                                    <path fill-rule="evenodd"
+                                        d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
+                                        clip-rule="evenodd" />
+                                </svg>
+                                Autofocus (AF)
+                            </label>
+
+                            <!-- Toggle Switch -->
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="autofocus-checkbox" class="sr-only peer autofocus-toggle"
+                                    checked>
+                                <div
+                                    class="w-11 h-6 bg-gray-600 rounded-full peer peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-800 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600">
+                                </div>
+                            </label>
+                        </div>
+
+                        <div id="focus-adjustment-container"
+                            class="opacity-50 pointer-events-none transition duration-300">
+                            <label for="manual-focus-slider" class="block text-sm font-medium text-gray-400 mb-1">
+                                Manual Focus: <span id="manual-focus-value" class="font-bold text-white">0.0</span>
+                            </label>
+                            <input type="range" id="manual-focus-slider" min="0" max="1000" value="0"
+                                class="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer range-lg transition duration-150"
+                                disabled>
+                            <div class="flex justify-between text-xs mt-1 text-gray-500">
+                                <span>Near (0)</span>
+                                <span>Far (1000)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Save Location -->
+                    <div class="mb-4">
+                        <label class="block text-gray-400 text-xs uppercase tracking-wider mb-2">Save Location</label>
+                        <div class="flex items-center gap-2">
+                            <div class="flex-grow bg-gray-800 rounded-lg px-3 py-2 text-sm text-gray-300 truncate"
+                                id="current-save-path">
+                                /default
+                            </div>
+                            <button id="change-dir-btn"
+                                class="bg-gray-700 hover:bg-gray-600 text-white p-2 rounded-lg transition duration-150 w-auto border-none flex-shrink-0"
+                                title="Change Save Location">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                                    xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z">
+                                    </path>
+                                </svg>
+                            </button>
+                        </div>
+                        <input type="hidden" id="subfolder-input" value="default">
+                    </div>
+
+                    <!-- Image Prefix -->
+                    <div>
+                        <label for="prefix-input" class="block text-sm font-medium text-gray-400">Image Prefix</label>
+                        <input type="text" id="prefix-input" value="IMG"
+                            class="mt-1 block w-full pl-3 pr-10 py-2 text-gray-300 bg-gray-700 border border-gray-600 rounded-md focus:outline-none focus:ring-accent-blue focus:border-accent-blue transition duration-150">
+                    </div>
+
+                    <!-- Hidden inputs for legacy compatibility if needed -->
+                    <input type="checkbox" id="delay-timer-checkbox" class="hidden">
+                    <input type="number" id="delay-timer-input" value="3" class="hidden">
+
                 </div>
+            </div>
 
-                <div class="control-group">
-                    <label for="prefix-input">File Prefix:</label>
-                    <input type="text" id="prefix-input" name="prefix" value="IMG">
+
+
+
+            <!-- Log Area (Hidden but kept for script compatibility) -->
+            <!-- Log Area was here, moved to main content -->
+        </div>
+    </main>
+
+    <!-- 3. Gallery/History Section (Full Width) -->
+    <section class="mt-8 bg-secondary-dark rounded-xl shadow-lg p-5">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-semibold text-white">Capture History</h2>
+            <div class="flex gap-2">
+                <button id="select-all-btn"
+                    class="hidden bg-gray-600 hover:bg-gray-500 text-white px-3 py-1 rounded text-xs font-medium transition">
+                    Select All
+                </button>
+                <button id="delete-selected-btn"
+                    class="hidden bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs font-medium transition flex items-center">
+                    <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16">
+                        </path>
+                    </svg>
+                    Delete (<span id="selected-count">0</span>)
+                </button>
+            </div>
+        </div>
+
+        <!-- Grid Container -->
+        <div id="gallery-container"
+            class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 max-h-[600px] overflow-y-auto p-2">
+            <!-- Gallery items will be injected here by JavaScript -->
+            <div id="gallery-placeholder" class="col-span-full text-center text-gray-500 italic p-8">
+                No images captured yet.
+            </div>
+        </div>
+    </section>
+
+    <!-- File Explorer Modal -->
+    <div id="file-explorer-modal"
+        class="fixed inset-0 bg-black bg-opacity-75 hidden flex items-center justify-center z-50">
+        <div
+            class="bg-gray-900 rounded-xl shadow-2xl w-full max-w-lg border border-gray-700 flex flex-col max-h-[80vh]">
+            <!-- Header -->
+            <div class="p-4 border-b border-gray-700 flex justify-between items-center">
+                <h3 class="text-lg font-bold text-white">Select Save Location</h3>
+                <button id="close-explorer-btn"
+                    class="text-gray-400 hover:text-white w-8 h-8 flex items-center justify-center rounded hover:bg-gray-700 transition">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12">
+                        </path>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Breadcrumbs & New Folder -->
+            <div class="p-4 bg-gray-800 border-b border-gray-700 flex justify-between items-center">
+                <div id="explorer-breadcrumbs" class="text-sm text-gray-300 font-mono truncate mr-4 flex-grow">
+                    /
                 </div>
+                <button id="new-folder-btn" title="New Folder"
+                    class="bg-gray-700 hover:bg-gray-600 text-white w-8 h-8 rounded text-sm flex items-center justify-center flex-shrink-0 transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                    </svg>
+                </button>
+            </div>
 
-                <div class="control-group">
-                    <button id="capture-image-btn">Capture Image</button>
-                </div>
+            <!-- Folder List -->
+            <div id="explorer-list" class="flex-grow overflow-y-auto p-2 space-y-1">
+                <!-- Folders will be injected here -->
+                <div class="text-center text-gray-500 py-4">Loading...</div>
+            </div>
 
-                <div class="control-group">
-                    <a href="/editor" class="button">Edit Config</a>
-                </div>
+            <!-- Footer -->
+            <div class="p-4 border-t border-gray-700 flex justify-end gap-3">
+                <button id="cancel-explorer-btn"
+                    class="px-4 py-2 rounded-lg text-gray-300 hover:bg-gray-800 transition">Cancel</button>
+                <button id="select-folder-btn"
+                    class="px-4 py-2 rounded-lg bg-accent-blue text-white font-bold hover:bg-blue-600 transition shadow-lg">
+                    Select This Folder
+                </button>
+            </div>
+        </div>
+    </div>
 
-                <div class="control-group">
-                    <label for="delay-timer-checkbox">Delay Timer:</label>
-                    <input type="checkbox" id="delay-timer-checkbox" name="delay-timer">
-                    <input type="number" id="delay-timer-input" name="delay-seconds" min="1" value="3" disabled>
-                    <span>seconds</span>
+    <!-- New Folder Dialog (Nested or separate, let's keep it simple with prompt for now) -->
+
+    <!-- Video Popup Modal -->
+    <div id="video-popup-modal"
+        class="fixed inset-0 bg-black/90 z-50 hidden flex items-center justify-center backdrop-blur-sm"
+        onclick="closeVideoPopup()">
+        <div class="relative max-w-[90vw] max-h-[90vh]" onclick="event.stopPropagation()">
+            <!-- Close Button -->
+            <button onclick="closeVideoPopup()"
+                class="absolute -top-12 right-0 text-white hover:text-blue-400 text-4xl font-bold transition duration-200"
+                title="Close">
+                &times;
+            </button>
+
+            <!-- Video Container -->
+            <div
+                class="relative rounded-lg overflow-hidden border-4 border-blue-500 shadow-[0_0_30px_rgba(59,130,246,0.6)]">
+                <img id="popup-video-feed" src="" alt="Popup Feed"
+                    class="max-w-full max-h-[85vh] object-contain block bg-black">
+
+                <!-- Info Overlay -->
+                <div
+                    class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent pt-10 pb-4 px-6">
+                    <div class="flex justify-between items-end">
+                        <div>
+                            <h3 id="popup-camera-name" class="text-white text-2xl font-bold drop-shadow-md">Camera Name
+                            </h3>
+                            <p id="popup-camera-details" class="text-blue-300 text-sm font-mono mt-1">Resolution: ... |
+                                Shutter: ...
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Focus Control (Hidden by default) -->
+                    <div id="popup-focus-control" class="mt-4 hidden max-w-md">
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="text-xs font-bold text-gray-400 uppercase tracking-wider">Manual Focus</label>
+                            <span id="popup-focus-value" class="text-xs font-mono text-yellow-400">0.0</span>
+                        </div>
+                        <input type="range" id="popup-focus-slider" min="0" max="1000" value="0"
+                            class="w-full h-2 bg-gray-600 rounded-lg appearance-none cursor-pointer">
+                        <p class="text-[10px] text-gray-500 mt-1 flex justify-between">
+                            <span>Near</span>
+                            <span>Far</span>
+                        </p>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <script src="/static/js/script.js?v=1.1"></script>
-</body>
-</html>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script src="/static/js/script.js?v=1.3"></script>
+{% endblock %}

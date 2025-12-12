@@ -1,1 +1,16 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 800 600"><rect width="800" height="600" fill="#ccc"/><text x="50%" y="50%" font-family="sans-serif" font-size="50" fill="#666" text-anchor="middle" dy=".3em">No Camera Selected</text></svg>
+<svg width="800" height="450" viewBox="0 0 800 450" xmlns="http://www.w3.org/2000/svg">
+    <style>
+        .text { font-family: sans-serif; fill: #9ca3af; font-size: 20px; text-anchor: middle; }
+        .icon { stroke: #9ca3af; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    </style>
+    <!-- Background -->
+    <rect width="100%" height="100%" fill="#1c202c"/>
+    
+    <!-- Video Camera Icon -->
+    <g transform="translate(376, 180) scale(2)">
+        <path class="icon" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+    </g>
+
+    <!-- Text -->
+    <text x="400" y="270" class="text">Connecting to Raspberry Pi camera stream...</text>
+</svg>

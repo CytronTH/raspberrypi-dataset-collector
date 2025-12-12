@@ -3,6 +3,7 @@ import cv2
 import time
 import pathlib
 import os
+import glob
 from picamera2 import Picamera2, Preview
 from picamera2.encoders import H264Encoder, Quality
 from picamera2.outputs import FileOutput
@@ -33,6 +34,10 @@ class CameraBase:
         self.is_running = False
         if self.thread:
             self.thread.join()
+
+    def close(self):
+        """Stops the camera and releases any resources."""
+        self.stop()
 
     def get_frame(self):
         return self.frame
@@ -120,6 +125,10 @@ class USBCamera(CameraBase):
     def set_shutter_speed(self, shutter_speed):
         # Most USB cameras don't support programmatic shutter speed control via OpenCV
         pass
+
+    def capture_array(self):
+        """Returns the latest captured frame (BGR)."""
+        return self.frame
 
     def _capture_loop(self):
         print(f"[USBCamera {self.path}] _capture_loop started for {self.width}x{self.height}.", file=sys.stderr)
@@ -211,6 +220,12 @@ class PiCamera(CameraBase):
         self.picam2.stop()
         self.is_running = False
 
+    def close(self):
+        """Stops and closes the camera, releasing all resources."""
+        print(f"[PiCamera {self.camera_id}] Closing camera.", file=sys.stderr)
+        self.picam2.close()
+        self.is_running = False
+
     def set_resolution(self, width, height):
         if self.width == width and self.height == height:
             return
@@ -262,26 +277,114 @@ class PiCamera(CameraBase):
             print("Starting autofocus cycle...", file=sys.stderr)
             self.picam2.autofocus_cycle()
         return self.capture_array()
-def detect_cameras():
-    print("--- DETECTING PI CAMERAS ---", file=sys.stderr)
-    cameras = {}
+def detect_usb_cameras():
+    """Detects USB cameras by scanning /dev/v4l/by-id/."""
+    usb_cameras = {}
     try:
-        pi_cameras = Picamera2.global_camera_info()
-        if pi_cameras:
-            for i, info in enumerate(pi_cameras):
-                print(f"Pi camera info: {info}", file=sys.stderr) # Debug print
+        # Find all USB camera symlinks
+        # We look for 'index0' which is typically the video capture node
+        paths = glob.glob('/dev/v4l/by-id/usb-*-video-index0')
+        
+        for symlink_path in paths:
+            try:
+                # Resolve the symlink to get the real device path (e.g., /dev/video16)
+                real_path = os.path.realpath(symlink_path)
+                
+                # Extract the index from the real path
+                basename = os.path.basename(real_path) # video16
+                if not basename.startswith('video'):
+                    continue
+                
+                cam_index = int(basename.replace('video', ''))
+                
+                # Extract a friendly name from the symlink
+                # Format is usually usb-Manufacturer_Model_Serial-video-index0
+                name_part = os.path.basename(symlink_path)
+                name_part = name_part.replace('usb-', '').replace('-video-index0', '')
+                friendly_name = f"USB Camera {cam_index} ({name_part})"
+                
+                usb_cameras[f"usb_{cam_index}"] = {
+                    "friendly_name": friendly_name,
+                    "type": "usb",
+                    "path": cam_index, # Use the V4L2 index for OpenCV
+                    "max_width": 1920, # Default max, can be updated if we probe
+                    "max_height": 1080,
+                    "resolutions": ['640x480', '1280x720', '1920x1080'],
+                    "has_autofocus": False
+                }
+            except Exception as e:
+                print(f"Error processing USB camera path {symlink_path}: {e}", file=sys.stderr)
+                
+    except Exception as e:
+        print(f"Error in detect_usb_cameras: {e}", file=sys.stderr)
+        
+    return usb_cameras
+
+def detect_cameras():
+    print("--- DETECTING CAMERAS ---", file=sys.stderr)
+    cameras = {}
+    
+    # 1. Detect Pi Cameras using Picamera2
+    try:
+        print("Scanning for Pi Cameras...", file=sys.stderr)
+        pi_cameras_info = Picamera2.global_camera_info()
+        if pi_cameras_info:
+            for info in pi_cameras_info:
+                # Skip if it looks like a USB camera (Picamera2 might list them)
+                if "usb" in info.get('Id', '').lower():
+                    continue
+                    
                 cam_id = info['Num']
                 cam_name = f"PiCamera {cam_id} ({info.get('Model', 'Unknown')})"
-                max_width, max_height = info.get('PixelArraySize', (4608, 2592)) # Use .get() for safety
+                max_width, max_height = info.get('PixelArraySize', (4608, 2592))
+                
+                resolutions = []
+                has_autofocus = False
+                
+                temp_cam = None
+                try:
+                    # Create a temporary instance to get detailed capabilities
+                    temp_cam = Picamera2(cam_id)
+                    has_autofocus = "AfMode" in temp_cam.camera_controls
+                    
+                    # Get and parse resolutions
+                    res_set = set()
+                    for mode in temp_cam.sensor_modes:
+                        size = mode.get('size')
+                        if size:
+                            res_set.add(f"{size[0]}x{size[1]}")
+                    
+                    # Sort resolutions by width, then height
+                    resolutions = sorted(list(res_set), key=lambda r: tuple(map(int, r.split('x'))))
+    
+                except Exception as e:
+                    print(f"Could not get detailed info for camera {cam_id}: {e}", file=sys.stderr)
+                    # Provide some default/fallback values
+                    resolutions = ['640x480', '1280x720', '1920x1080']
+                finally:
+                    if temp_cam:
+                        temp_cam.close() # Ensure camera is released
+    
                 cameras[f"pi_{cam_id}"] = {
                     "friendly_name": cam_name, 
                     "type": "pi", 
                     "path": cam_id,
                     "max_width": max_width,
-                    "max_height": max_height
+                    "max_height": max_height,
+                    "resolutions": resolutions,
+                    "has_autofocus": has_autofocus
                 }
     except Exception as e:
-        print(f"Error in detect_cameras (pi): {e}", file=sys.stderr)
-            
+        print(f"Error detecting Pi cameras: {e}", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
+
+    # 2. Detect USB Cameras
+    try:
+        print("Scanning for USB Cameras...", file=sys.stderr)
+        usb_cams = detect_usb_cameras()
+        cameras.update(usb_cams)
+    except Exception as e:
+        print(f"Error detecting USB cameras: {e}", file=sys.stderr)
+
     print(f"Detected cameras: {cameras}", file=sys.stderr)
     return cameras

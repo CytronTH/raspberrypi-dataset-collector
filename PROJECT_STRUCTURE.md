@@ -1,0 +1,38 @@
+# Project Structure and File Descriptions
+
+This document provides an overview of the files in the `dataset_collector` project.
+
+## Core Application
+*   **`main.py`**: The main entry point of the application. It initializes the FastAPI server, defines API endpoints (e.g., `/video_feed`, `/api/capture`), manages WebSocket connections for real-time updates, and orchestrates the application lifecycle.
+*   **`camera_handler.py`**: Contains the logic for detecting and controlling cameras. It provides a unified interface for both Raspberry Pi cameras (using `picamera2`/`libcamera`) and USB webcams (using `OpenCV`). It handles frame capture, resolution switching, and camera properties.
+*   **`mqtt_handler.py`**: Manages the MQTT connection. It connects to the broker, publishes the system status ("online"/"offline"), handles logging events, and listens for the `capture/trigger` topic to initiate remote captures.
+*   **`config_handler.py`**: A utility module for safely loading and saving configuration files (`camera_config.yaml` and `mqtt_config.json`).
+
+## Web Interface
+*   **`templates/`**: Contains the HTML files (using Jinja2 templating).
+    *   **`base.html`**: The master template that defines the common layout, navigation bar, and footer script includes for all pages.
+    *   **`index.html`**: The **Single Camera View** page. It shows a focused feed of one camera, a gallery of recent captures, and granular controls.
+    *   **`grid.html`**: The **Grid View** page. It displays live feeds from all detected cameras simultaneously and allows for "Capture All" actions.
+    *   **`editor.html`**: The **Config Editor** page. It provides a text editor for the YAML config and a form for MQTT settings.
+*   **`static/`**: Contains static assets.
+    *   **`js/script.js`**: The frontend logic for the Single Camera View (`index.html`). Handles video reloading, capture buttons, gallery updates, and the manually focus overlay.
+    *   **`js/grid.js`**: The frontend logic for the Grid View (`grid.html`). Handles the dynamic camera grid, file explorer modals, and popup video feeds.
+    *   **`css/style.css` & `css/editor.css`**: Styling for the application structure and the editor components.
+
+## Configuration
+*   **`config_defaults/`**: Directory containing default configuration templates.
+    *   **`lite.yaml`**: Optimized settings for Pi Zero 2W (720p, AF off).
+    *   **`pro.yaml`**: Optimized settings for Pi 4/5 (1080p, AF on).
+*   **`camera_config.yaml`**: The active configuration file used by the app. This is generated from the defaults by the setup script.
+*   **`mqtt_config.json`**: Stores MQTT connection details (Broker IP, port, credentials).
+*   **`requirements.txt`**: Lists all Python library dependencies required to run the project.
+
+## Installers
+*   **`setup_lite.sh`**: The installer for **Low Resource** devices (Pi Zero 2W). Enables 1GB swap and applies the `lite.yaml` config.
+*   **`setup_pro.sh`**: The installer for **High Resource** devices (Pi 4, 5). Skips swap setup and applies the `pro.yaml` config.
+
+## Scripts & Tools
+*   **`tests/`**: A directory containing diagnostic scripts:
+    *   `check_picam.py`: Verifies if the Raspberry Pi camera stack is working.
+    *   `check_cv2.py`: Verifies dependencies for USB cameras.
+    *   `test_mqtt_trigger.py`: A utility to manually send a trigger command to the MQTT broker for testing.
