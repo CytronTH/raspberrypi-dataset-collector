@@ -383,11 +383,13 @@ async def perform_global_capture(request: CaptureAllRequest, source: str = "Unkn
     return captured_files
 
 # --- Video Streaming Generator ---
-async def stream_generator(camera_path: str):
+async def stream_generator(camera_path: str, quality: int = 80, max_width: int = 1280):
     camera = active_cameras.get(camera_path)
     if not camera or not camera.is_running:
         print("Camera not active for streaming", file=sys.stderr)
         return
+
+    encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), quality]
 
     while True:
         try:
@@ -396,11 +398,20 @@ async def stream_generator(camera_path: str):
                 await asyncio.sleep(0.01)
                 continue
 
+            # Smart Downscaling: Resize BEFORE color conversion to save CPU/RAM
+            # Check dimensions (height, width, channels)
+            h, w = frame_rgb.shape[:2]
+            if w > max_width:
+                aspect_ratio = w / h
+                new_h = int(max_width / aspect_ratio)
+                # cv2.resize expects (width, height)
+                frame_rgb = cv2.resize(frame_rgb, (max_width, new_h), interpolation=cv2.INTER_AREA)
+
             if isinstance(camera, PiCamera):
                 frame_bgr = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
-                flag, encoded_image = cv2.imencode(".jpg", frame_bgr)
+                flag, encoded_image = cv2.imencode(".jpg", frame_bgr, encode_param)
             else: # USBCamera
-                flag, encoded_image = cv2.imencode(".jpg", frame_rgb)
+                flag, encoded_image = cv2.imencode(".jpg", frame_rgb, encode_param)
 
             if not flag:
                 continue
@@ -879,7 +890,8 @@ async def api_system_stats():
         return {"error": str(e)}
 
 @app.get("/video_feed")
-async def video_feed(camera_path: str, resolution: str = "1280x720", shutter_speed: str = "Auto"):
+async def video_feed(camera_path: str, resolution: str = "1280x720", shutter_speed: str = "Auto", 
+                     preview_quality: int = 70, preview_width: int = 1280):
     try:
         if camera_path not in available_cameras:
             raise HTTPException(status_code=404, detail="Camera not found")
@@ -907,7 +919,10 @@ async def video_feed(camera_path: str, resolution: str = "1280x720", shutter_spe
             shutter_speed_us = parse_shutter_speed(shutter_speed)
             camera.set_shutter_speed(shutter_speed_us)
 
-        return StreamingResponse(stream_generator(camera_path), media_type="multipart/x-mixed-replace; boundary=frame")
+        return StreamingResponse(
+            stream_generator(camera_path, quality=preview_quality, max_width=preview_width), 
+            media_type="multipart/x-mixed-replace; boundary=frame"
+        )
 
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid resolution format. Please use WxH (e.g., 1280x720).")
