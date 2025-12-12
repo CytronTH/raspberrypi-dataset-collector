@@ -197,6 +197,10 @@ class CaptureAllRequest(BaseModel):
 
 # --- Static Files and Templates ---
 # --- Static Files and Templates ---
+# Ensure capture directory exists before mounting
+if not CAPTURE_DIR_BASE.exists():
+    CAPTURE_DIR_BASE.mkdir(parents=True, exist_ok=True)
+
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.mount("/captures", StaticFiles(directory=CAPTURE_DIR_BASE), name="captures")
 templates = Jinja2Templates(directory="templates")
