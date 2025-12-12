@@ -25,12 +25,11 @@ fi
 
 # 3. Apply Lite Configuration
 echo "[3/6] Applying Lite Configuration..."
-if [ ! -f "camera_config.yaml" ]; then
-    cp config_defaults/lite.yaml camera_config.yaml
-    echo " -> Created default Lite configuration."
-else
+# Config copy removed by user request. App will auto-detect config.
+if [ -f "camera_config.yaml" ]; then
     echo " -> Existing config found. Keeping it."
-    echo "    (Tip: You can reset settings by deleting camera_config.yaml and re-running this script)"
+else
+    echo " -> No config found. App will generate default config on first run."
 fi
 
 # 4. Setup Virtual Environment

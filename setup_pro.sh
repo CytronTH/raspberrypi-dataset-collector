@@ -22,11 +22,11 @@ source venv/bin/activate
 
 # 3. Apply Pro Configuration
 echo "[3/5] Applying Pro Configuration..."
-if [ ! -f "camera_config.yaml" ]; then
-    cp config_defaults/pro.yaml camera_config.yaml
-    echo " -> Created default Pro configuration (1080p)."
-else
+# Config copy removed by user request. App will auto-detect config.
+if [ -f "camera_config.yaml" ]; then
     echo " -> Existing config found. Keeping it."
+else
+    echo " -> No config found. App will generate default config on first run."
 fi
 
 # 4. Install Dependencies
