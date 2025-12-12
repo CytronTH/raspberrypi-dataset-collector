@@ -7,3 +7,4 @@ pyyaml
 paho-mqtt>=2.0.0
 pydantic
 numpy<2
+psutil

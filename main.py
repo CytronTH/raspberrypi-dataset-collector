@@ -22,6 +22,7 @@ from config_handler import (
     load_mqtt_config, save_mqtt_config
 )
 from mqtt_handler import MQTTClientWrapper
+from system_monitor import get_system_stats
 
 # --- Constants ---
 # Define a safe base directory for all captures
@@ -868,6 +869,14 @@ async def delete_images(request: DeleteImagesRequest):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/system_stats")
+async def api_system_stats():
+    try:
+        return get_system_stats()
+    except Exception as e:
+        print(f"Stats Error: {e}", file=sys.stderr)
+        return {"error": str(e)}
 
 @app.get("/video_feed")
 async def video_feed(camera_path: str, resolution: str = "1280x720", shutter_speed: str = "Auto"):

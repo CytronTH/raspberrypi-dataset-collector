@@ -55,6 +55,12 @@
     </nav>
 
     <div id="status-container" class="status-bar">
+        <div id="system-stats" class="status-item"
+            style="margin-right: 1rem; font-family: monospace; font-size: 0.8rem;">
+            CPU: <span id="cpu-stat" class="text-blue-400">--</span>% |
+            RAM: <span id="ram-stat" class="text-purple-400">--</span>% |
+            Temp: <span id="temp-stat" class="text-red-400">--</span>°C
+        </div>
         <div id="mqtt-status" class="status-item">
             MQTT <span id="mqtt-status-dot" class="status-dot disconnected"></span>
         </div>
@@ -99,6 +105,7 @@
             });
         });
     </script>
+    <script src="/static/js/monitor.js"></script>
     {% endblock %}
 </body>
 
