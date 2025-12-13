@@ -20,6 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const deleteSelectedBtn = document.getElementById('delete-selected-btn');
     const selectedCountSpan = document.getElementById('selected-count');
     const selectAllBtn = document.getElementById('select-all-btn');
+    const saveSettingsBtn = document.getElementById('save-settings-btn');
 
     // Hidden inputs (legacy support)
     const subfolderInput = document.getElementById('subfolder-input');
@@ -449,6 +450,58 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
 
+
+
+    if (saveSettingsBtn) {
+        saveSettingsBtn.addEventListener('click', () => {
+            const selectedCameraPath = cameraSelect ? cameraSelect.value : null;
+            if (!selectedCameraPath) {
+                logMessage('Select a camera first', true);
+                return;
+            }
+
+            const resolution = resolutionSelect ? resolutionSelect.value : null;
+            const shutterSpeed = shutterSpeedSelect ? shutterSpeedSelect.value : null;
+            const autofocus = autofocusCheckbox ? autofocusCheckbox.checked : null;
+            const prefix = prefixInput ? prefixInput.value : null;
+
+            saveSettingsBtn.disabled = true;
+            saveSettingsBtn.textContent = "Saving...";
+
+            fetch('/api/save_camera_settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    camera_path: selectedCameraPath,
+                    resolution: resolution,
+                    shutter_speed: shutterSpeed,
+                    autofocus: autofocus,
+                    prefix: prefix
+                }),
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        logMessage(`Settings saved for ${selectedCameraPath}`);
+                    } else {
+                        logMessage(`Error saving settings: ${data.detail}`, true);
+                    }
+                })
+                .catch(error => {
+                    console.error('Save Settings Error:', error);
+                    logMessage(`Error saving settings: ${error.message}`, true);
+                })
+                .finally(() => {
+                    saveSettingsBtn.disabled = false;
+                    saveSettingsBtn.innerHTML = `
+                             <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path>
+                             </svg>
+                             Save Settings
+                 `;
+                });
+        });
+    }
 
     // --- Video Popup Logic ---
     function openVideoPopup() {

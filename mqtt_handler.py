@@ -103,3 +103,13 @@ class MQTTClientWrapper:
             self.client.disconnect()
             self.running = False
             print("MQTT Client stopped", file=sys.stderr)
+
+    def publish(self, topic, payload, qos=0, retain=False):
+        if self.connected:
+            try:
+                self.client.publish(topic, payload, qos, retain)
+                self._log(f"Published to {topic}")
+            except Exception as e:
+                self._log(f"Failed to publish to {topic}: {e}")
+        else:
+            self._log(f"Cannot publish to {topic}: Client not connected")

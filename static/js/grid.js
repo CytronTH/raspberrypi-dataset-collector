@@ -306,6 +306,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <input type="hidden" id="save-location-${safeId}" value="${defaultSavePath}">
                     </div>
 
+                    <!-- Image Prefix -->
+                    <div>
+                        <label for="prefix-${safeId}" class="block text-sm font-medium text-gray-400 mb-1">Prefix</label>
+                        <input type="text" id="prefix-${safeId}" value="IMG" placeholder="IMG"
+                               class="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-blue-500 focus:border-blue-500 text-white transition duration-150">
+                    </div>
+
                     <!-- Resolution & Shutter Speed -->
                     <div class="grid grid-cols-2 gap-4">
                         
@@ -578,7 +585,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 shutter_speed: document.getElementById(`shutter-speed-${safeId}`).value,
                 autofocus: document.getElementById(`autofocus-${safeId}`).checked,
                 manual_focus: parseFloat(document.getElementById(`focus-adjustment-${safeId}`).value) / 100,
-                subfolder: document.getElementById(`save-location-${safeId}`).value
+                subfolder: document.getElementById(`save-location-${safeId}`).value,
+                prefix: document.getElementById(`prefix-${safeId}`).value
             });
         });
 

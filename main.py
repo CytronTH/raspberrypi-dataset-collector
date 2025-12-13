@@ -2,6 +2,7 @@ import cv2
 import asyncio
 import os
 import time
+import json
 import pathlib
 import yaml
 from contextlib import asynccontextmanager
@@ -55,20 +56,69 @@ async def mqtt_callback(data):
                 resolution=param_resolution
             )
             
+            # Load saved defaults (Prefix)
+            saved_defaults = {}
+            try:
+                 full_config = load_config()
+                 saved_defaults = full_config.get('defaults', {})
+            except:
+                 pass
+
+            prefix_val = data.get('prefix')
+            if not prefix_val and 'prefix' in saved_defaults:
+                 prefix_val = saved_defaults['prefix']
+            if not prefix_val: 
+                 prefix_val = 'IMG'
+
             request = CaptureAllRequest(
                 captures=[single_cap_request],
-                prefix=data.get('prefix', 'IMG')
+                prefix=prefix_val
             )
     else:
         # Global context (Multi-cam) or invalid context
         print(f"[{'MQTT'}] Global context. Capturing all.", file=sys.stderr)
+        
+        # Load saved defaults (Prefix)
+        saved_defaults = {}
+        try:
+             full_config = load_config()
+             saved_defaults = full_config.get('defaults', {})
+        except Exception as e:
+             print(f"Error loading defaults for MQTT: {e}", file=sys.stderr)
+
+        # If prefix is not in data (or is None), try to use saved default
+        if 'prefix' not in data or data['prefix'] is None:
+             if 'prefix' in saved_defaults:
+                  data['prefix'] = saved_defaults['prefix']
+
         request = CaptureAllRequest(**data)
 
     print(f"Triggering capture via MQTT with data: {original_data} -> Context: {active_camera_context}", file=sys.stderr)
     try:
-        await perform_global_capture(request, source="MQTT")
+        captured_files = await perform_global_capture(request, source="MQTT")
+        
+        # Send confirmation if capture was successful
+        if captured_files:
+            confirmation_payload = {
+                "status": "success",
+                "request_id": original_data.get("request_id"), # Echo request_id if present
+                "files": [str(pathlib.Path(f).name) for f in captured_files],
+                "count": len(captured_files),
+                "timestamp": time.time()
+            }
+            if mqtt_client:
+                mqtt_client.publish("dataset_collector/capture/finished", json.dumps(confirmation_payload))
+
     except Exception as e:
         print(f"Error executing MQTT capture: {e}", file=sys.stderr)
+        # Optional: Send error status
+        if mqtt_client:
+             error_payload = {
+                "status": "error",
+                "error": str(e),
+                "timestamp": time.time()
+            }
+             mqtt_client.publish("dataset_collector/capture/finished", json.dumps(error_payload))
 
 
 @asynccontextmanager
@@ -187,12 +237,14 @@ class PerCameraCaptureSettings(BaseModel):
     autofocus: bool | None = None
     manual_focus: float | None = None
     subfolder: str | None = None
+    prefix: str | None = None
 
 class CaptureAllRequest(BaseModel):
     subfolder: str | None = "default"
     prefix: str | None = "IMG"
     resolution: str | None = None
     shutter_speed: str | None = None
+    autofocus: bool | None = None
     captures: list[PerCameraCaptureSettings] | None = None
 
 
@@ -246,14 +298,49 @@ async def perform_global_capture(request: CaptureAllRequest, source: str = "Unkn
     Executes the capture logic for all active cameras based on the request.
     This logic is extracted for reuse by API and MQTT.
     """
-    if not active_cameras:
-        print(f"[{source}] No active cameras to capture from.", file=sys.stderr)
+    if not active_cameras and not available_cameras:
+        print(f"[{source}] No active or configured cameras to capture from.", file=sys.stderr)
         return None
 
-    capture_requests = request.captures or [
-        PerCameraCaptureSettings(camera_path=cam_path, resolution=request.resolution, shutter_speed=request.shutter_speed)
-        for cam_path in active_cameras.keys()
-    ]
+    # If active_cameras is empty (e.g. cold start from MQTT), try to populate it from available_cameras
+    # This ensures we capture from all known cameras if no specific subset is running
+    if not active_cameras:
+        print(f"[{source}] No active cameras. Initializing from available_cameras...", file=sys.stderr)
+        for cam_path, cam_info in available_cameras.items():
+            try:
+                if cam_info.get('type') == 'usb':
+                     active_cameras[cam_path] = USBCamera(path=cam_info['path'], friendly_name=cam_info['friendly_name'])
+                elif cam_info.get('type') == 'pi':
+                    active_cameras[cam_path] = PiCamera(
+                        camera_id=cam_info['path'],
+                        friendly_name=cam_info['friendly_name'],
+                        max_width=cam_info.get('max_width'),
+                        max_height=cam_info.get('max_height')
+                    )
+            except Exception as e:
+                print(f"Failed to init camera {cam_path}: {e}", file=sys.stderr)
+
+
+    capture_requests = request.captures
+    if not capture_requests:
+         # Build capture list from *available_cameras* or active_cameras, prioritizing saved config
+        capture_requests = []
+        for cam_path in active_cameras.keys():
+            # Get default settings from config if available
+            cam_config = available_cameras.get(cam_path, {})
+            # Use request override OR config value OR defaults
+            res = request.resolution or cam_config.get('resolution')
+            shutter = request.shutter_speed or cam_config.get('shutter_speed')
+            af = request.autofocus if request.autofocus is not None else cam_config.get('autofocus_enabled')
+            
+            capture_requests.append(
+                PerCameraCaptureSettings(
+                    camera_path=cam_path, 
+                    resolution=res, 
+                    shutter_speed=shutter,
+                    autofocus=af
+                )
+            )
 
     original_settings = {}
     captured_files = []
@@ -299,6 +386,18 @@ async def perform_global_capture(request: CaptureAllRequest, source: str = "Unkn
                 continue
 
             frame = None
+            
+            # Ensure camera is running
+            if not camera.is_running:
+                print(f"[{source}] Camera {camera_path} not running. Auto-starting...", file=sys.stderr)
+                try:
+                    camera.start()
+                    # Allow a brief warm-up/settle time for AE/AWB
+                    time.sleep(2)
+                except Exception as e:
+                    print(f"[{source}] Failed to start camera {camera_path}: {e}", file=sys.stderr)
+                    continue
+
             if isinstance(camera, PiCamera):
                 if capture_req.autofocus:
                     frame = camera.autofocus_and_capture()
@@ -330,7 +429,9 @@ async def perform_global_capture(request: CaptureAllRequest, source: str = "Unkn
             if isinstance(active_cameras[camera_path], PiCamera):
                 frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
 
-            safe_prefix = "".join(c for c in request.prefix if c.isalnum() or c in ('_', '-')).strip() or "IMG"
+            # Determine prefix: Per-camera > Global Request Default > "IMG"
+            current_prefix_raw = capture_req.prefix or request.prefix or "IMG"
+            safe_prefix = "".join(c for c in current_prefix_raw if c.isalnum() or c in ('_', '-')).strip() or "IMG"
             filename = f"{safe_prefix}_{camera_path.replace('/', '_')}_{capture_time}.jpg"
             save_path = current_save_dir / filename # Use current_save_dir
 
@@ -612,6 +713,61 @@ async def capture_image(request: CaptureRequest):
     except Exception as e:
         print(f"Error in capture_image: {e}", file=sys.stderr)
         raise HTTPException(status_code=500, detail=str(e))
+
+class SaveCameraSettingsRequest(BaseModel):
+    camera_path: str
+    resolution: str | None = None
+    shutter_speed: str | None = None
+    autofocus: bool | None = None
+    prefix: str | None = None
+
+@app.post("/api/save_camera_settings")
+async def save_camera_settings(request: SaveCameraSettingsRequest):
+    global available_cameras
+    try:
+        if request.camera_path not in available_cameras:
+             raise HTTPException(status_code=404, detail="Camera not found")
+
+        # Update the in-memory config
+        cam_config = available_cameras[request.camera_path]
+        if request.resolution:
+            cam_config['resolution'] = request.resolution
+        if request.shutter_speed:
+            cam_config['shutter_speed'] = request.shutter_speed
+        if request.autofocus is not None:
+             cam_config['autofocus_enabled'] = request.autofocus
+
+        # Load full config from file to persist it properly
+        full_config = load_config()
+        if 'cameras' not in full_config:
+            full_config['cameras'] = {}
+        
+        # Save Global Defaults (Prefix)
+        if request.prefix:
+            if 'defaults' not in full_config:
+                full_config['defaults'] = {}
+            full_config['defaults']['prefix'] = request.prefix
+
+        if request.camera_path in full_config['cameras']:
+             full_config['cameras'][request.camera_path].update({
+                 'resolution': request.resolution,
+                 'shutter_speed': request.shutter_speed,
+                 'autofocus_enabled': request.autofocus
+             })
+             # Filter out None values to keep config clean
+             full_config['cameras'][request.camera_path] = {k: v for k, v in full_config['cameras'][request.camera_path].items() if v is not None}
+        
+        save_config(full_config)
+        
+        # Update available_cameras global to match
+        available_cameras = full_config.get('cameras', {})
+        # Note: We don't have a global var for defaults currently, we'll load it on demand or add it to a global config obj
+        
+        print(f"Saved settings for {request.camera_path}: Res={request.resolution}, AF={request.autofocus}, Prefix={request.prefix}", file=sys.stderr)
+        return JSONResponse({"status": "success", "message": "Settings saved."})
+    except Exception as e:
+         print(f"Error saving camera settings: {e}", file=sys.stderr)
+         raise HTTPException(status_code=500, detail=str(e))
 
 class SetActiveCameraRequest(BaseModel):
     camera_path: Optional[str] = None
@@ -934,4 +1090,4 @@ async def video_feed(camera_path: str, resolution: str = "1280x720", shutter_spe
 
 # --- Main Execution ---
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
