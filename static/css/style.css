@@ -650,3 +650,10 @@ input:checked+.slider:before {
 .slider.round:before {
     border-radius: 50%;
 }
+/* Resolution Overlay */
+#resolution-overlay {
+    z-index: 20;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(2px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}

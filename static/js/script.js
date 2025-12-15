@@ -33,6 +33,48 @@ document.addEventListener('DOMContentLoaded', () => {
     let knownFiles = new Set();
     let selectedFiles = new Set(); // Track selected files
 
+    // --- Resolution Overlay Logic ---
+    const resolutionOverlay = document.getElementById('resolution-overlay');
+
+    function updateResolutionOverlay() {
+        if (!resolutionOverlay || !resolutionSelect) return;
+
+        const currentRes = resolutionSelect.value;
+        if (!currentRes) return;
+
+        const [reqW, reqH] = currentRes.split('x').map(Number);
+        const isLowPerf = document.body.classList.contains('perf-low');
+
+        let previewW = reqW;
+        let previewH = reqH;
+
+        if (isLowPerf) {
+            // Logic must match backend SAFE_MAX (1280x720)
+            const MAX_W = 1280;
+            const MAX_H = 720;
+            if (reqW > MAX_W || reqH > MAX_H) {
+                previewW = MAX_W;
+                previewH = MAX_H;
+            }
+        }
+
+        const previewText = `${previewW}x${previewH}` + (isLowPerf && (reqW > previewW) ? " (Capped)" : "");
+        const captureText = currentRes;
+
+        resolutionOverlay.textContent = `Preview: ${previewText} | Capture: ${captureText}`;
+        resolutionOverlay.classList.remove('hidden');
+    }
+
+    // Observe body class changes for performance mode toggles
+    const obs = new MutationObserver((mutations) => {
+        mutations.forEach((mu) => {
+            if (mu.type === 'attributes' && mu.attributeName === 'class') {
+                updateResolutionOverlay();
+            }
+        });
+    });
+    obs.observe(document.body, { attributes: true });
+
     // --- Functions ---
 
     function logMessage(message, isError = false) {
@@ -87,6 +129,8 @@ document.addEventListener('DOMContentLoaded', () => {
             cameraFeed.src = `/video_feed?camera_path=${selectedCameraPath}&resolution=${resolution}&shutter_speed=${shutterSpeed}`;
             if (resolutionDisplay) resolutionDisplay.textContent = `Resolution: ${resolution}`;
             logMessage(`Feed active: ${availableCameras[selectedCameraPath].friendly_name}`);
+
+            updateResolutionOverlay();
 
             // Update preview status text if it exists
             const previewStatus = document.getElementById('preview-status');
