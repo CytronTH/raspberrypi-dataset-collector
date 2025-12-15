@@ -43,24 +43,28 @@ def test_camera_capture_memory_usage():
         cam.start()
         time.sleep(2) # Warmup
         
-        # Test Resolution: 12MP (4608x2592)
-        # Note: If sensor doesn't support this, it might fail, but we want to test high load.
-        # We'll try to find the max supported resolution.
-        max_res = cam_info['max_width'], cam_info['max_height']
-        print(f"Setting resolution to max: {max_res}")
-        cam.set_resolution(max_res[0], max_res[1])
-        time.sleep(2)
+        # Start at Low Res (720p) - simulates Preview Mode
+        preview_res = (1280, 720)
+        print(f"Setting preview resolution: {preview_res}")
+        cam.set_resolution(*preview_res) 
+        cam.start()
+        time.sleep(2) # Warmup
+        
+        # Test Resolution: Max (e.g. 12MP)
+        max_res = (cam_info['max_width'], cam_info['max_height'])
+        print(f"Target Capture Resolution: {max_res}")
         
         output_dir = "tests/output"
         os.makedirs(output_dir, exist_ok=True)
         
-        print("Starting capture loop (10 iterations)...")
-        for i in range(10):
+        print("Starting capture loop (switch res per capture)...")
+        for i in range(5):
             filename = os.path.join(output_dir, f"capture_test_{i}.jpg")
             start_time = time.time()
             
             # --- THE CRITICAL CALL ---
-            cam.capture_to_file(filename) 
+            # Pass explicit resolution to force transient switch to Still Mode
+            cam.capture_to_file(filename, width=max_res[0], height=max_res[1])
             # -------------------------
             
             duration = time.time() - start_time

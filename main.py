@@ -741,10 +741,14 @@ async def capture_image(request: CaptureRequest):
 
         # Apply settings before capture
         # Apply settings before capture
+        width = None 
+        height = None
         if request.resolution:
             try:
                 width, height = map(int, request.resolution.split('x'))
-                camera.set_resolution(width, height)
+                # For PiCamera, we pass this to capture_to_file instead of setting it globally
+                if not isinstance(camera, PiCamera): 
+                    camera.set_resolution(width, height)
             except ValueError:
                 pass # Ignore invalid resolution format
         if request.shutter_speed:
@@ -772,7 +776,7 @@ async def capture_image(request: CaptureRequest):
                       camera.autofocus_cycle() # we don't need the return frame anymore
             
             # Use the new direct-to-file method
-            camera.capture_to_file(filepath)
+            camera.capture_to_file(filepath, width=width, height=height)
             
             # Verify file exists and has size
             if not os.path.exists(filepath) or os.path.getsize(filepath) == 0:

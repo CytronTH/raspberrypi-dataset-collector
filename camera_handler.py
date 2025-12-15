@@ -84,7 +84,7 @@ class CameraBase:
     def set_shutter_speed(self, shutter_speed):
         raise NotImplementedError()
 
-    def capture_to_file(self, filepath):
+    def capture_to_file(self, filepath, width=None, height=None):
         """Captures a frame directly to a file."""
         raise NotImplementedError()
 
@@ -130,8 +130,10 @@ class USBCamera(CameraBase):
         # Most USB cameras don't support programmatic shutter speed control via OpenCV
         pass
 
-    def capture_to_file(self, filepath):
+    def capture_to_file(self, filepath, width=None, height=None):
         """Captures current frame to file using OpenCV."""
+        # USB Camera resolution switching is handled by set_resolution beforehand for now
+        # implementing transient switch for USB is harder due to warmup time
         if self.frame is None:
             raise RuntimeError("No frame available from USB camera")
         success = cv2.imwrite(filepath, self.frame)
@@ -279,14 +281,49 @@ class PiCamera(CameraBase):
         if self.is_running and self._has_autofocus:
             self.picam2.set_controls({"AfMode": controls.AfModeEnum.Manual, "LensPosition": focus_value})
 
-    def capture_to_file(self, filepath):
-        """Captures directly to file using Picamera2's efficient encoder."""
+    def capture_to_file(self, filepath, width=None, height=None):
+        """
+        Captures directly to file using Picamera2's efficient encoder.
+        If width/height are provided, temporarily reconfigures the camera for a still capture
+        without changing the persistent video stream configuration (to avoid OOM on Pi Zero).
+        """
         if not self.is_running:
+             # If not running, we must start it (or just run a oneshot?)
+             # For simplicity, assume caller expects it running? Actually, we can handle it.
              raise RuntimeError("Camera not running")
         
-        # We use capture_file which streams directly to disk via encoder
-        # This avoids loading the raw array into Python memory
-        self.picam2.capture_file(filepath)
+        reconfigured = False
+        original_width = self.width
+        original_height = self.height
+
+        # Check if we need to switch resolution for this capture
+        if width and height and (width != self.width or height != self.height):
+            print(f"[PiCamera] Switching to Still Mode: {width}x{height}", file=sys.stderr)
+            self.stop() # Release video buffers!
+            
+            # Create a STILL configuration (usually uses fewer buffers than video)
+            config = self.picam2.create_still_configuration(main={"size": (width, height)})
+            self.picam2.configure(config)
+            self.picam2.start()
+            # self.is_running = True # internal state is managed by ensuring we stop faithfully later
+            reconfigured = True
+        
+        try:
+            # We use capture_file which streams directly to disk via encoder
+            # This avoids loading the raw array into Python memory
+            self.picam2.capture_file(filepath)
+        finally:
+            if reconfigured:
+                print(f"[PiCamera] Restoring Video Mode: {original_width}x{original_height}", file=sys.stderr)
+                # Ensure camera is stopped regardless of internal flag
+                self.picam2.stop() 
+                
+                # Restore original video configuration
+                config = self.picam2.create_video_configuration(main={"size": (original_width, original_height)})
+                self.picam2.configure(config)
+                self.picam2.start()
+                self.is_running = True # Ensure flag is reset to True as we restarted video
+
         return filepath
 
     def capture_array(self):
