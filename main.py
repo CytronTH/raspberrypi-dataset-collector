@@ -1,3 +1,4 @@
+import cv2
 import asyncio
 import os
 import time
