@@ -372,14 +372,7 @@ async def perform_global_capture(request: CaptureAllRequest, source: str = "Unkn
             current_save_dir = CAPTURE_DIR_BASE / "images" / safe_current_subfolder_name
             current_save_dir.mkdir(parents=True, exist_ok=True)
             
-            # Setup Filename
-            capture_time = int(time.time() * 1000)
-            current_prefix_raw = capture_req.prefix or request.prefix or "IMG"
-            safe_prefix = "".join(c for c in current_prefix_raw if c.isalnum() or c in ('_', '-')).strip() or "IMG"
-            filename = f"{safe_prefix}_{camera_path.replace('/', '_')}_{capture_time}.jpg"
-            save_path = current_save_dir / filename
-
-            # Determine Resolution
+            # Determine Resolution FIRST (needed for filename)
             # Priority: Request > Configured Default > Max (if Pi) > Current
             width = None
             height = None
@@ -397,6 +390,17 @@ async def perform_global_capture(request: CaptureAllRequest, source: str = "Unkn
                       width = camera.width
                       height = camera.height
             
+            # Application of Resolution to Camera happens in set_resolution (if strictly needed) 
+            # or passed to capture_to_file (transient).
+
+            # Setup Filename with Resolution
+            capture_time = int(time.time() * 1000)
+            current_prefix_raw = capture_req.prefix or request.prefix or "IMG"
+            safe_prefix = "".join(c for c in current_prefix_raw if c.isalnum() or c in ('_', '-')).strip() or "IMG"
+            # Format: PREFIX_WxH_CAM_TIME.jpg
+            filename = f"{safe_prefix}_{width}x{height}_{camera_path.replace('/', '_')}_{capture_time}.jpg"
+            save_path = current_save_dir / filename
+
             # Apply other settings (AF, Shutter)
             if isinstance(camera, PiCamera):
                 if capture_req.autofocus is not None:
@@ -745,13 +749,6 @@ async def capture_image(request: CaptureRequest):
             subfolder_path = subfolder_path / request.subfolder
         subfolder_path.mkdir(parents=True, exist_ok=True)
 
-        filename = f"{prefix}_{timestamp}_{request.camera_path.replace('/', '_')}.jpg"
-        filepath = subfolder_path / filename
-
-        # Apply settings before capture
-        # Apply settings before capture
-        width = None 
-        height = None
         if request.resolution:
             try:
                 width, height = map(int, request.resolution.split('x'))
@@ -760,6 +757,17 @@ async def capture_image(request: CaptureRequest):
                     camera.set_resolution(width, height)
             except ValueError:
                 pass # Ignore invalid resolution format
+        
+        # Fallback to current/preferred resolution if not set
+        if not width or not height:
+             if camera.preferred_resolution:
+                  width, height = camera.preferred_resolution
+             else:
+                  width = camera.width
+                  height = camera.height
+
+        filename = f"{prefix}_{width}x{height}_{timestamp}_{request.camera_path.replace('/', '_')}.jpg"
+        filepath = subfolder_path / filename
         if request.shutter_speed:
             s_speed = 0
             if isinstance(request.shutter_speed, str) and request.shutter_speed.lower() == "auto":
