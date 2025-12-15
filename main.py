@@ -391,8 +391,11 @@ async def perform_global_capture(request: CaptureAllRequest, source: str = "Unkn
             
             # If no resolution specified in request, use the current camera resolution
             if not width or not height:
-                 width = camera.width
-                 height = camera.height
+                 if camera.preferred_resolution:
+                      width, height = camera.preferred_resolution
+                 else:
+                      width = camera.width
+                      height = camera.height
             
             # Apply other settings (AF, Shutter)
             if isinstance(camera, PiCamera):
@@ -1175,6 +1178,10 @@ async def video_feed(camera_path: str, resolution: str = "1280x720", shutter_spe
 
         # Prepare resolution
         width, height = map(int, resolution.split('x'))
+        
+        # Store the user's intended resolution in the camera object
+        # This allows MQTT/Global captures to use the "Real" resolution even if preview is capped
+        camera.preferred_resolution = (width, height)
         
         # OOM FIX: Cap resolution for Low Performance Mode (Pi Zero 2W)
         perf_mode = system_config.get("_resolved_performance_mode", "high")

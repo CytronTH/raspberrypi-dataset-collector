@@ -22,6 +22,7 @@ class CameraBase:
         self.frame = None
         self.is_running = False
         self.ready_event = Event()
+        self.preferred_resolution = None # Stores the user-desired resolution (ignoring OOM caps)
 
     def start(self):
         self.is_running = True
