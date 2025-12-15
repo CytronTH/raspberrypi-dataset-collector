@@ -470,9 +470,6 @@ async def perform_global_capture(request: CaptureAllRequest, source: str = "Unkn
                 # Cleanup partial file
                 if save_path.exists() and save_path.stat().st_size == 0:
                      save_path.unlink()
-                })
-            else:
-                print(f"[{source}] ERROR: Failed to save image from camera {camera_path}", file=sys.stderr)
 
         print(f"[{source}] Capture sequence complete. Total files saved: {len(captured_files)}", file=sys.stderr)
 
