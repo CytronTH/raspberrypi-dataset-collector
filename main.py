@@ -740,8 +740,13 @@ async def capture_image(request: CaptureRequest):
         filepath = subfolder_path / filename
 
         # Apply settings before capture
+        # Apply settings before capture
         if request.resolution:
-            camera.set_resolution(request.resolution)
+            try:
+                width, height = map(int, request.resolution.split('x'))
+                camera.set_resolution(width, height)
+            except ValueError:
+                pass # Ignore invalid resolution format
         if request.shutter_speed:
             camera.set_shutter_speed(request.shutter_speed)
         if request.autofocus is not None:
