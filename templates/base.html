@@ -51,6 +51,18 @@
                     <span class="menu-text">Config Editor</span>
                 </a>
             </li>
+            <li>
+                <div class="perf-mode-container"
+                    style="padding: 12px 15px; color: #ecf0f1; display: flex; align-items: center; gap: 10px;">
+                    <span class="menu-text" style="flex-grow: 1;">Perf Mode</span>
+                    <label class="switch" style="position: relative; display: inline-block; width: 34px; height: 20px;">
+                        <input type="checkbox" id="perf-mode-toggle">
+                        <span class="slider round"
+                            style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px;"></span>
+                        <!-- Custom CSS for slider pseudo-element needs to be invalid in inline style, using class in style.css recommended but for single file edit constraint I will try to rely on style.css additions I will make next. -->
+                    </label>
+                </div>
+            </li>
         </ul>
     </nav>
 
@@ -76,21 +88,83 @@
     {% block scripts %}
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            // ... menu logic ...
+            const perfToggle = document.getElementById('perf-mode-toggle');
+
+            // Function to set UI based on mode
+            const applyModeToUI = (mode) => {
+                document.body.classList.remove('perf-high', 'perf-low');
+                document.body.classList.add(`perf-${mode}`);
+
+                // Toggle state: Checked = High, Unchecked = Low
+                if (perfToggle) {
+                    perfToggle.checked = (mode === 'high');
+                }
+
+                if (mode === 'low') {
+                    document.documentElement.style.setProperty('--backdrop-blur', 'none');
+                    document.documentElement.style.setProperty('--shadow-intensity', '0');
+                } else {
+                    document.documentElement.style.removeProperty('--backdrop-blur');
+                    document.documentElement.style.removeProperty('--shadow-intensity');
+                }
+            }
+
+            // Fetch Performance Mode on Load
+            fetch('/api/system_stats')
+                .then(res => res.json())
+                .then(data => {
+                    const mode = data.performance_mode || 'high';
+                    applyModeToUI(mode);
+                    console.log(`Performance Mode: ${mode}`);
+                })
+                .catch(err => console.error("Error fetching perf mode:", err));
+
+            // Handle Toggle Change
+            if (perfToggle) {
+                perfToggle.addEventListener('change', (e) => {
+                    const newMode = e.target.checked ? 'high' : 'low';
+
+                    // Optimistic UI update
+                    applyModeToUI(newMode);
+
+                    // Call API
+                    fetch('/api/performance_mode', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ mode: newMode })
+                    })
+                        .then(res => res.json())
+                        .then(data => {
+                            console.log("Mode saved:", data);
+                            // If 'auto' was logic, we might need to handle resolved.
+                            // But sidebar switch is explicit 'high' or 'low'.
+                        })
+                        .catch(err => {
+                            console.error("Failed to save mode:", err);
+                            // Revert on error?
+                        });
+                });
+            }
+
             // ... menu logic ...
             const sideMenu = document.getElementById('side-menu');
             const pageContent = document.getElementById('page-content');
             const toggleBtn = document.getElementById('toggle-btn');
             const menuTextSpans = document.querySelectorAll('.menu-text');
+            const perfContainer = document.querySelector('.perf-mode-container'); // Get container
 
             const setMenuState = (isCollapsed) => {
                 sideMenu.classList.toggle('collapsed', isCollapsed);
                 pageContent.classList.toggle('collapsed', isCollapsed);
 
-                // Hide text when collapsed, show when expanded
-                // menuTextSpans.forEach(span => {
-                //     span.style.display = isCollapsed ? 'none' : 'inline';
-                // });
+                // Handle perf toggle visibility if needed
+                if (perfContainer) {
+                    // When collapsed, maybe hide the toggle or show simplified?
+                    // Currently menu-text class handles text hiding.
+                    // The toggle itself might stay visible or hide.
+                    // Let's hide the container text manually if needed loop didn't catch it
+                    // logic in CSS handles .menu-text
+                }
 
                 localStorage.setItem('menuCollapsed', isCollapsed);
             };

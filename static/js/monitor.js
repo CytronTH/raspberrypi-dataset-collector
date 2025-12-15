@@ -9,6 +9,16 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!response.ok) return;
             const data = await response.json();
 
+            // Smart Sidebar: Hide Grid View if only 1 camera
+            const gridNavItem = document.getElementById('nav-grid-item');
+            if (gridNavItem) {
+                if (data.camera_count !== undefined && data.camera_count <= 1) {
+                    gridNavItem.style.display = 'none';
+                } else {
+                    gridNavItem.style.display = 'block'; // Or 'list-item'
+                }
+            }
+
             // CPU
             cpuStat.textContent = data.cpu.toFixed(1);
             if (data.cpu > 80) cpuStat.className = 'text-red-500 font-bold';
@@ -35,7 +45,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Update every 2 seconds
-    setInterval(updateStats, 2000);
+    // Adjust polling based on performance mode
+    const isLowPerf = document.body.classList.contains('perf-low');
+    const intervalTime = isLowPerf ? 5000 : 2000;
+
+    // Update every X seconds
+    setInterval(updateStats, intervalTime);
     updateStats(); // Initial call
 });

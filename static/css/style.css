@@ -543,3 +543,110 @@ button:hover {
     align-items: center;
     font-weight: 500;
 }
+
+/* --- Performance Mode Overrides --- */
+
+/* Low Performance Mode (Pi Zero 2W) */
+body.perf-low {
+    /* Disable smooth scrolling on low end */
+    scroll-behavior: auto;
+}
+
+body.perf-low .status-bar,
+body.perf-low .preview-box,
+body.perf-low .bg-gray-800,
+body.perf-low .bg-gray-900,
+body.perf-low .modal-content,
+body.perf-low input,
+body.perf-low select,
+body.perf-low button {
+    /* Remove blur effects */
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+
+    /* Remove box shadows to save rasterization time */
+    box-shadow: none !important;
+
+    /* Simplified borders */
+    border-color: #4b5563 !important;
+}
+
+body.perf-low .animate-pulse,
+body.perf-low .transition,
+body.perf-low .transform,
+body.perf-low .hover\:scale-105:hover {
+    /* Disable animations and transforms */
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+}
+
+body.perf-low .bg-gradient-to-t {
+    /* Replace gradients with solid colors */
+    background: rgba(0, 0, 0, 0.8) !important;
+}
+
+/* Specific component simplifications */
+body.perf-low .status-bar {
+    background: #111827 !important;
+    /* Solid dark background */
+}
+
+body.perf-low .preview-box {
+    border-width: 2px !important;
+    background-color: #000 !important;
+}
+
+/* Toggle Switch Styles */
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    -webkit-transition: .4s;
+    transition: .4s;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 16px;
+    width: 16px;
+    left: 2px;
+    bottom: 2px;
+    background-color: white;
+    -webkit-transition: .4s;
+    transition: .4s;
+}
+
+input:checked+.slider {
+    background-color: #2196F3;
+}
+
+input:focus+.slider {
+    box-shadow: 0 0 1px #2196F3;
+}
+
+input:checked+.slider:before {
+    -webkit-transform: translateX(14px);
+    -ms-transform: translateX(14px);
+    transform: translateX(14px);
+}
+
+/* Rounded sliders */
+.slider.round {
+    border-radius: 34px;
+}
+
+.slider.round:before {
+    border-radius: 50%;
+}

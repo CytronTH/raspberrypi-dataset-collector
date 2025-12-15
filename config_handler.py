@@ -1,28 +1,80 @@
 import yaml
 import sys
 import os
+import platform
+import multiprocessing
 
 CONFIG_PATH = "/home/pi/dataset_collector/camera_config.yaml"
+
+def detect_system_performance():
+    """
+    Detects if the system is 'high' or 'low' performance.
+    Criteria for Low:
+    - 'Zero' in model name (Pi Zero/Zero 2)
+    - Single core (though Zero 2 is quad core, it's slow)
+    - Low RAM (not easily checked without extra libs, but model name is good proxy)
+    """
+    try:
+        # Check /proc/cpuinfo for model name on Raspberry Pi
+        if os.path.exists("/proc/cpuinfo"):
+            with open("/proc/cpuinfo", "r") as f:
+                content = f.read()
+                if "Zero" in content: # Covers Zero and Zero 2
+                    return "low"
+        
+        # Fallback: Check CPU count. 
+        # Pi Zero 1 is single core. Zero 2 is Quad. Pi 3/4/5 are Quad.
+        # But Zero 2 is significantly slower than Pi 4.
+        # So "Zero" check is best.
+        
+        # If running on non-Pi (dev machine), treat as high
+        return "high"
+    except Exception as e:
+        print(f"Error detecting system performance: {e}", file=sys.stderr)
+        return "high" # Default to high
 
 def load_config():
     """Loads the camera configuration from the YAML file."""
     if not os.path.exists(CONFIG_PATH):
-        return {"cameras": {}}
-    try:
-        with open(CONFIG_PATH, 'r') as f:
-            config = yaml.safe_load(f)
-            if config is None:
-                return {"cameras": {}}
-            return config
-    except Exception as e:
-        print(f"Error loading config: {e}", file=sys.stderr)
-        return {"cameras": {}}
+        default_config = {"cameras": {}, "performance_mode": "auto"}
+    else:
+        try:
+            with open(CONFIG_PATH, 'r') as f:
+                config = yaml.safe_load(f)
+                if config is None:
+                    config = {"cameras": {}}
+                
+                default_config = config
+        except Exception as e:
+            print(f"Error loading config: {e}", file=sys.stderr)
+            default_config = {"cameras": {}}
+    
+    # Resolve Performance Mode
+    perf_setting = default_config.get("performance_mode", "auto")
+    if perf_setting == "auto":
+        resolved_mode = detect_system_performance()
+    else:
+        resolved_mode = perf_setting
+    
+    # Inject resolved mode into config object (runtime only, doesn't save to file unless saved later)
+    default_config["_resolved_performance_mode"] = resolved_mode
+    default_config["performance_mode"] = perf_setting # Ensure the setting exists
+    
+    return default_config
 
 def save_config(config):
     """Saves the configuration to the YAML file."""
     try:
+        # Create a copy to avoid modifying the runtime object
+        config_to_save =config.copy()
+        
+        # Remove internal keys (starting with _)
+        keys_to_remove = [k for k in config_to_save.keys() if k.startswith('_')]
+        for k in keys_to_remove:
+            del config_to_save[k]
+
         with open(CONFIG_PATH, 'w') as f:
-            yaml.dump(config, f, default_flow_style=False)
+            yaml.dump(config_to_save, f, default_flow_style=False)
     except Exception as e:
         print(f"Error saving config: {e}", file=sys.stderr)
 

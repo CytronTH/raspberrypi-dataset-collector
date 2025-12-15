@@ -128,12 +128,15 @@ async def lifespan(app: FastAPI):
     """
     # --- Startup ---
     global available_cameras
+    global system_config # Declare system_config as global
     print("--- DETECTING CAMERAS ---")
     try:
-        config = load_config()
+        # Load initial config
+        system_config = load_config()
         detected_cams = detect_cameras()
-        config = generate_default_config(config, detected_cams)
-        available_cameras = config.get('cameras', {})
+        # Update system_config with defaults based on detected cameras
+        system_config = generate_default_config(system_config, detected_cams)
+        available_cameras = system_config.get('cameras', {})
         print(f"Detected cameras: {available_cameras}")
     except Exception as e:
         print(f"Error during camera detection: {e}", file=sys.stderr)
@@ -520,7 +523,10 @@ async def stream_generator(camera_path: str, quality: int = 80, max_width: int =
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + bytearray(encoded_image) + b'\r\n')
             
-            await asyncio.sleep(0.01)
+            # FPS Throttling based on Performance Mode
+            perf_mode = system_config.get("_resolved_performance_mode", "high")
+            sleep_duration = 0.1 if perf_mode == "low" else 0.01
+            await asyncio.sleep(sleep_duration)
         except Exception as e:
             print(f"Error in stream_generator for {camera_path}: {e}", file=sys.stderr)
             # If the client disconnects, this loop will break.
@@ -594,6 +600,45 @@ async def get_config():
 class SaveConfigRequest(BaseModel):
     config: str
     selected_cameras: dict = {}
+
+class PerformanceModeRequest(BaseModel):
+    mode: str
+
+@app.post("/api/performance_mode")
+async def save_performance_mode(request: PerformanceModeRequest):
+    global system_config
+    try:
+        if request.mode not in ["high", "low", "auto"]:
+            raise HTTPException(status_code=400, detail="Invalid mode. Must be 'high', 'low', or 'auto'.")
+
+        # Update global config immediately
+        system_config["performance_mode"] = request.mode
+        
+        # Resolve the mode if auto
+        if request.mode == "auto":
+             # We need to re-import or existing function should be available?
+             # detect_system_performance is in config_handler, but it's not imported.
+             # Actually load_config handles resolution.
+             # Let's just reload the config logic to be safe/consistent
+             from config_handler import detect_system_performance
+             resolved = detect_system_performance()
+             system_config["_resolved_performance_mode"] = resolved
+        else:
+             system_config["_resolved_performance_mode"] = request.mode
+
+        # Persist to disk
+        # We need to load existing file, update one key, and save, 
+        # to avoid overwriting other unrelated changes if system_config is stale?
+        # But system_config is the main source of truth.
+        save_config(system_config)
+
+        print(f"Performance mode changed to: {request.mode} (Resolved: {system_config['_resolved_performance_mode']})", file=sys.stderr)
+
+        return {"status": "success", "mode": request.mode, "resolved": system_config["_resolved_performance_mode"]}
+
+    except Exception as e:
+        print(f"Error saving performance mode: {e}", file=sys.stderr)
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/config")
 async def save_config_endpoint(request: SaveConfigRequest):
@@ -1040,7 +1085,10 @@ async def delete_images(request: DeleteImagesRequest):
 @app.get("/api/system_stats")
 async def api_system_stats():
     try:
-        return get_system_stats()
+        stats = get_system_stats()
+        stats['performance_mode'] = system_config.get("_resolved_performance_mode", "high")
+        stats['camera_count'] = len(available_cameras)
+        return stats
     except Exception as e:
         print(f"Stats Error: {e}", file=sys.stderr)
         return {"error": str(e)}
