@@ -785,7 +785,10 @@ async def capture_image(request: CaptureRequest):
             raise e
 
         # Notify MQTT (Async)
-        relative_path = pathlib.Path(filename).relative_to(CAPTURE_DIR_BASE)
+        if hasattr(filepath, 'relative_to'):
+             relative_path = filepath.relative_to(CAPTURE_DIR_BASE)
+        else:
+             relative_path = pathlib.Path(filepath).relative_to(CAPTURE_DIR_BASE)
 
         # Return the response format expected by script.js
         # (perform_global_capture already handled saving, metadata, and WS broadcast)
