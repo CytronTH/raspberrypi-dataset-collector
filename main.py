@@ -351,113 +351,125 @@ async def perform_global_capture(request: CaptureAllRequest, source: str = "Unkn
     global capture_count
 
     try:
-        # 1. Apply settings to all cameras first
+        # 1. Determine Settings for All Cameras
         print(f"[{source}] Starting capture sequence for cameras: {[r.camera_path for r in capture_requests]}", file=sys.stderr)
-        print(f"[{source}] Applying settings to all cameras...", file=sys.stderr)
+        
+        # 2. Capture Sequentially directly to file (Low Memory Usage)
         for capture_req in capture_requests:
             camera_path = capture_req.camera_path
+            
+            # Skip if camera not active/found
             if camera_path not in active_cameras:
-                continue
-            
+                 print(f"[{source}] Camera {camera_path} not active. Skipping.", file=sys.stderr)
+                 continue
+
             camera = active_cameras[camera_path]
-            original_settings[camera_path] = {
-                "resolution": (camera.width, camera.height),
-                "shutter_speed": getattr(camera, '_shutter_speed', None),
-                "autofocus_enabled": getattr(camera, '_autofocus_enabled', None)
-            }
-
-            if capture_req.resolution:
-                width, height = map(int, capture_req.resolution.split('x'))
-                camera.set_resolution(width, height)
-
-            if isinstance(camera, PiCamera):
-                if capture_req.autofocus:
-                    camera.set_autofocus(True)
-                elif capture_req.autofocus is False:
-                    camera.set_autofocus(False)
-                
-                if capture_req.shutter_speed:
-                    camera.set_shutter_speed(parse_shutter_speed(capture_req.shutter_speed))
-
-        # 2. Capture frames from all cameras (as simultaneously as possible)
-        print(f"[{source}] Capturing frames from all cameras...", file=sys.stderr)
-        frames = {}
-        capture_time = int(time.time() * 1000)
-        for capture_req in capture_requests:
-            camera_path = capture_req.camera_path
-            camera = active_cameras.get(camera_path)
-            if not camera:
-                continue
-
-            frame = None
+            cam_config = available_cameras.get(camera_path, {})
             
-            # Ensure camera is running
-            if not camera.is_running:
-                print(f"[{source}] Camera {camera_path} not running. Auto-starting...", file=sys.stderr)
-                try:
-                    camera.start()
-                    # Allow a brief warm-up/settle time for AE/AWB
-                    time.sleep(2)
-                except Exception as e:
-                    print(f"[{source}] Failed to start camera {camera_path}: {e}", file=sys.stderr)
-                    continue
-
-            if isinstance(camera, PiCamera):
-                if capture_req.autofocus:
-                    frame = camera.autofocus_and_capture()
-                else:
-                    frame = camera.capture_array()
-            else:
-                frame = camera.get_frame()
-            
-            if frame is not None:
-                frames[camera_path] = frame
-            else:
-                print(f"Failed to get frame from {camera_path}", file=sys.stderr)
-
-        # 3. Save all captured frames
-        print(f"[{source}] Saving {len(frames)} captured frames...", file=sys.stderr)
-        for capture_req in capture_requests: # Iterate through capture_requests to get per-camera settings
-            camera_path = capture_req.camera_path
-            print(f"[{source}] Processing frame for {camera_path}...", file=sys.stderr)
-            frame = frames.get(camera_path)
-            if frame is None:
-                continue
-
-            # Determine the subfolder for this specific camera
-            current_subfolder = capture_req.subfolder or request.subfolder # Use per-camera subfolder, or global
-            safe_current_subfolder_name = pathlib.Path(current_subfolder).name or "default"
+            # Setup Save Path
+            current_subfolder = capture_req.subfolder or request.subfolder
+            safe_current_subfolder_name = pathlib.Path(current_subfolder).name or "default" if current_subfolder else "default"
             current_save_dir = CAPTURE_DIR_BASE / "images" / safe_current_subfolder_name
-            current_save_dir.mkdir(parents=True, exist_ok=True) # Ensure directory exists
-
-            if isinstance(active_cameras[camera_path], PiCamera):
-                frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-
-            # Determine prefix: Per-camera > Global Request Default > "IMG"
+            current_save_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Setup Filename
+            capture_time = int(time.time() * 1000)
             current_prefix_raw = capture_req.prefix or request.prefix or "IMG"
             safe_prefix = "".join(c for c in current_prefix_raw if c.isalnum() or c in ('_', '-')).strip() or "IMG"
             filename = f"{safe_prefix}_{camera_path.replace('/', '_')}_{capture_time}.jpg"
-            save_path = current_save_dir / filename # Use current_save_dir
+            save_path = current_save_dir / filename
 
-            if cv2.imwrite(str(save_path), frame):
-                print(f"[{source}] Saved image for {camera_path}: {save_path}", file=sys.stderr)
+            # Determine Resolution
+            # Priority: Request > Configured Default > Max (if Pi) > Current
+            width = None
+            height = None
+            
+            if capture_req.resolution:
+                 try:
+                     width, height = map(int, capture_req.resolution.split('x'))
+                 except ValueError: pass
+            
+            # If no resolution specified in request, check for meaningful defaults
+            if not width or not height:
+                 # If PiCamera, and no resolution specified, default to Max Resolution for MQTT/Global captures
+                 # This ensures high-quality datasets by default.
+                 if isinstance(camera, PiCamera):
+                      width = cam_config.get('max_width')
+                      height = cam_config.get('max_height')
+            
+            # Apply other settings (AF, Shutter)
+            if isinstance(camera, PiCamera):
+                if capture_req.autofocus is not None:
+                     camera.set_autofocus(capture_req.autofocus)
+                
+                # Sanitize shutter speed
+                if capture_req.shutter_speed:
+                     s_speed = 0
+                     if isinstance(capture_req.shutter_speed, str) and capture_req.shutter_speed.lower() == "auto":
+                         s_speed = 0
+                     else:
+                         try:
+                             s_speed = int(capture_req.shutter_speed)
+                         except: s_speed = 0
+                     camera.set_shutter_speed(s_speed)
+
+
+            # Perform Capture
+            print(f"[{source}] Capturing from {camera_path} to {save_path} (Res: {width}x{height})...", file=sys.stderr)
+            try:
+                # Ensure camera is running
+                if not camera.is_running:
+                     camera.start()
+                     time.sleep(2) # Warmup
+
+                if isinstance(camera, PiCamera):
+                     if capture_req.autofocus:
+                          camera.autofocus_and_capture() # Just for AF side effect? no, it returns frame. 
+                          # We ignore return. The AF cycle is done.
+                          # Actually autofocus_and_capture returns capture_array output.
+                          # We just want the AF cycle.
+                          # Let's just cycle AF if needed
+                          if hasattr(camera.picam2, 'autofocus_cycle'):
+                               camera.picam2.autofocus_cycle()
+                     
+                     # Direct to File Capture (OOM Safe)
+                     camera.capture_to_file(str(save_path), width=width, height=height)
+                
+                else:
+                     # USB Camera
+                     camera.capture_to_file(str(save_path), width=width, height=height)
+
                 captured_files.append(str(save_path))
                 capture_count += 1
-                # Add metadata if applicable
-                if isinstance(active_cameras[camera_path], PiCamera):
-                    metadata = active_cameras[camera_path].picam2.capture_metadata()
-                    exposure_time_us = metadata.get('ExposureTime')
-                    if exposure_time_us and exposure_time_us > 0:
-                        exif_dict = {"Exif": {piexif.ExifIFD.ExposureTime: (exposure_time_us, 1_000_000)}}
-                        piexif.insert(piexif.dump(exif_dict), str(save_path))
                 
-                # Broadcast new file event
+                # Metadata (Exif) logic - reload file to add exif? 
+                # Picamera2 might handle some, but we did manual insertion before.
+                # If we want ExposureTime, we need to read metadata.
+                # Capture_to_file doesn't return metadata easily unless we access it from picam2 state.
+                if isinstance(camera, PiCamera):
+                     metadata = camera.picam2.capture_metadata()
+                     exposure_time_us = metadata.get('ExposureTime', 0)
+                     if exposure_time_us > 0:
+                          try:
+                              exif_dict = {"Exif": {piexif.ExifIFD.ExposureTime: (exposure_time_us, 1_000_000)}}
+                              piexif.insert(piexif.dump(exif_dict), str(save_path))
+                          except Exception as e:
+                              print(f"Failed to add EXIF: {e}", file=sys.stderr)
+
+                # Broadcast
                 relative_filename = str(save_path.relative_to(CAPTURE_DIR_BASE))
                 await manager.broadcast({
                     "type": "new_file",
                     "filename": relative_filename,
                     "camera_path": camera_path,
                     "source": source
+                })
+
+            except Exception as e:
+                print(f"[{source}] Capture failed for {camera_path}: {e}", file=sys.stderr)
+                # Cleanup partial file
+                if save_path.exists() and save_path.stat().st_size == 0:
+                     save_path.unlink()
                 })
             else:
                 print(f"[{source}] ERROR: Failed to save image from camera {camera_path}", file=sys.stderr)
