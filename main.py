@@ -748,7 +748,15 @@ async def capture_image(request: CaptureRequest):
             except ValueError:
                 pass # Ignore invalid resolution format
         if request.shutter_speed:
-            camera.set_shutter_speed(request.shutter_speed)
+            s_speed = 0
+            if isinstance(request.shutter_speed, str) and request.shutter_speed.lower() == "auto":
+                s_speed = 0
+            else:
+                try:
+                    s_speed = int(request.shutter_speed)
+                except ValueError:
+                    s_speed = 0 # Default to auto on error
+            camera.set_shutter_speed(s_speed)
         if request.autofocus is not None:
             if isinstance(camera, PiCamera):
                 camera.set_autofocus(request.autofocus)
