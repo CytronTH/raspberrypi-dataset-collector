@@ -718,30 +718,59 @@ async def get_shutter_speed_range(camera_path: str):
 @app.post("/api/capture")
 async def capture_image(request: CaptureRequest):
     try:
-        # Create a single-camera capture request locally
-        # to reuse the global capture logic
-        capture_req = CaptureAllRequest(
-            subfolder=request.subfolder,
-            prefix=request.prefix,
-            captures=[
-                PerCameraCaptureSettings(
-                    camera_path=request.camera_path,
-                    resolution=request.resolution,
-                    shutter_speed=request.shutter_speed,
-                    autofocus=request.autofocus,
-                    manual_focus=request.manual_focus
-                )
-            ]
-        )
         
-        # Use "WebUI" as source for logging
-        captured_files = await perform_global_capture(capture_req, source="WebUI")
+        # Ensure camera is active
+        if request.camera_path not in active_cameras:
+            raise HTTPException(status_code=404, detail=f"Camera {request.camera_path} not active.")
         
-        if not captured_files:
-            raise HTTPException(status_code=500, detail="Capture failed: No file produced.")
+        camera = active_cameras[request.camera_path]
+
+        # Generate filename and path
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
+        prefix = request.prefix if request.prefix else get_default_prefix()
+        
+        # Determine subfolder
+        subfolder_path = CAPTURE_DIR_BASE / "images"
+        if request.subfolder:
+            subfolder_path = subfolder_path / request.subfolder
+        subfolder_path.mkdir(parents=True, exist_ok=True)
+
+        filename = f"{prefix}_{timestamp}_{request.camera_path.replace('/', '_')}.jpg"
+        filepath = subfolder_path / filename
+
+        # Apply settings before capture
+        if request.resolution:
+            camera.set_resolution(request.resolution)
+        if request.shutter_speed:
+            camera.set_shutter_speed(request.shutter_speed)
+        if request.autofocus is not None:
+            if isinstance(camera, PiCamera):
+                camera.set_autofocus(request.autofocus)
+        if request.manual_focus is not None:
+            if isinstance(camera, PiCamera):
+                camera.set_manual_focus(request.manual_focus)
+
+        # Trigger capture
+        try:
+            if request.autofocus:
+                 # Trigger AF cycle if requested
+                 if isinstance(camera, PiCamera) and camera._has_autofocus:
+                      camera.autofocus_cycle() # we don't need the return frame anymore
             
-        # Since we asked for one camera, we expect one file
-        filename = captured_files[0]
+            # Use the new direct-to-file method
+            camera.capture_to_file(filepath)
+            
+            # Verify file exists and has size
+            if not os.path.exists(filepath) or os.path.getsize(filepath) == 0:
+                 raise RuntimeError("Capture failed: Output file is empty or missing")
+                 
+        except Exception as e:
+            # Clean up empty file if it exists
+            if os.path.exists(filepath):
+                os.remove(filepath)
+            raise e
+
+        # Notify MQTT (Async)
         relative_path = pathlib.Path(filename).relative_to(CAPTURE_DIR_BASE)
 
         # Return the response format expected by script.js

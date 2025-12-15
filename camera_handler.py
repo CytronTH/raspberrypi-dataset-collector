@@ -84,6 +84,10 @@ class CameraBase:
     def set_shutter_speed(self, shutter_speed):
         raise NotImplementedError()
 
+    def capture_to_file(self, filepath):
+        """Captures a frame directly to a file."""
+        raise NotImplementedError()
+
 
     def _capture_loop(self):
         raise NotImplementedError()
@@ -125,6 +129,15 @@ class USBCamera(CameraBase):
     def set_shutter_speed(self, shutter_speed):
         # Most USB cameras don't support programmatic shutter speed control via OpenCV
         pass
+
+    def capture_to_file(self, filepath):
+        """Captures current frame to file using OpenCV."""
+        if self.frame is None:
+            raise RuntimeError("No frame available from USB camera")
+        success = cv2.imwrite(filepath, self.frame)
+        if not success:
+             raise RuntimeError(f"Failed to write image to {filepath}")
+        return filepath
 
     def capture_array(self):
         """Returns the latest captured frame (BGR)."""
@@ -265,6 +278,16 @@ class PiCamera(CameraBase):
         self._manual_focus_value = focus_value
         if self.is_running and self._has_autofocus:
             self.picam2.set_controls({"AfMode": controls.AfModeEnum.Manual, "LensPosition": focus_value})
+
+    def capture_to_file(self, filepath):
+        """Captures directly to file using Picamera2's efficient encoder."""
+        if not self.is_running:
+             raise RuntimeError("Camera not running")
+        
+        # We use capture_file which streams directly to disk via encoder
+        # This avoids loading the raw array into Python memory
+        self.picam2.capture_file(filepath)
+        return filepath
 
     def capture_array(self):
         """Captures a single frame. Renamed from capture_still for clarity."""
