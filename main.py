@@ -1117,7 +1117,19 @@ async def video_feed(camera_path: str, resolution: str = "1280x720", shutter_spe
         if not camera.is_running:
             camera.start()
 
+        # Prepare resolution
         width, height = map(int, resolution.split('x'))
+        
+        # OOM FIX: Cap resolution for Low Performance Mode (Pi Zero 2W)
+        perf_mode = system_config.get("_resolved_performance_mode", "high")
+        if perf_mode == "low":
+             SAFE_MAX_WIDTH = 1280
+             SAFE_MAX_HEIGHT = 720
+             if width > SAFE_MAX_WIDTH or height > SAFE_MAX_HEIGHT:
+                 print(f"[{perf_mode}] High resolution requested ({width}x{height}). Capping to {SAFE_MAX_WIDTH}x{SAFE_MAX_HEIGHT} to prevent OOM.", file=sys.stderr)
+                 width = SAFE_MAX_WIDTH
+                 height = SAFE_MAX_HEIGHT
+
         camera.set_resolution(width, height)
         if isinstance(camera, PiCamera):
             shutter_speed_us = parse_shutter_speed(shutter_speed)

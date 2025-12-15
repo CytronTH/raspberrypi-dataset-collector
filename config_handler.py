@@ -91,24 +91,41 @@ def generate_default_config(config, detected_cameras):
         if cam_key not in config['cameras']:
             print(f"New camera detected: {cam_info['friendly_name']}. Adding to config.", file=sys.stderr)
             config_changed = True
+            
+            # Common fields
+            base_config = {
+                'path': cam_info['path'],
+                'friendly_name': cam_info['friendly_name'],
+                'type': cam_info['type'],
+                'max_width': cam_info.get('max_width'),
+                'max_height': cam_info.get('max_height'),
+            }
+
             if cam_info['type'] == 'pi':
-                config['cameras'][cam_key] = {
-                    'path': cam_info['path'],
-                    'friendly_name': cam_info['friendly_name'],
-                    'type': 'pi',
+                base_config.update({
                     'resolutions': ['640x480', '800x600', '1280x720', '1920x1080', '2304x1296', '4608x2592'],
                     'has_autofocus': True,
                     'shutter_speed_range': [30, 1000]
-                }
+                })
             else: # usb
-                config['cameras'][cam_key] = {
-                    'path': cam_info['path'],
-                    'friendly_name': cam_info['friendly_name'],
-                    'type': 'usb',
+                base_config.update({
                     'resolutions': ['640x480', '800x600', '1280x720', '1920x1080'],
                     'has_autofocus': False,
                     'shutter_speed_range': "unavailable"
-                }
+                })
+            
+            config['cameras'][cam_key] = base_config
+        
+        else:
+            # Ensure runtime properties (like max dimensions) are up to date 
+            # even for existing config entries, as they might be missing from old files.
+            # We don't mark config_changed=True here unless we want to force a save of these properties.
+            # Let's force save if they are missing to avoid future lookups failing.
+            current_cam = config['cameras'][cam_key]
+            if 'max_width' not in current_cam and 'max_width' in cam_info:
+                 current_cam['max_width'] = cam_info['max_width']
+                 current_cam['max_height'] = cam_info['max_height']
+                 config_changed = True
     
     # Remove disconnected cameras
     # List keys to avoid runtime error during iteration
