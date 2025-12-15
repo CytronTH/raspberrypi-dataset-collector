@@ -389,13 +389,10 @@ async def perform_global_capture(request: CaptureAllRequest, source: str = "Unkn
                      width, height = map(int, capture_req.resolution.split('x'))
                  except ValueError: pass
             
-            # If no resolution specified in request, check for meaningful defaults
+            # If no resolution specified in request, use the current camera resolution
             if not width or not height:
-                 # If PiCamera, and no resolution specified, default to Max Resolution for MQTT/Global captures
-                 # This ensures high-quality datasets by default.
-                 if isinstance(camera, PiCamera):
-                      width = cam_config.get('max_width')
-                      height = cam_config.get('max_height')
+                 width = camera.width
+                 height = camera.height
             
             # Apply other settings (AF, Shutter)
             if isinstance(camera, PiCamera):
