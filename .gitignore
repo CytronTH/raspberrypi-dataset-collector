@@ -15,6 +15,7 @@ env/
 captures/
 camera_config.yaml
 mqtt_config.json
+sftp_config.json
 release/
 *.log
 

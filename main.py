@@ -190,6 +190,7 @@ app = FastAPI(lifespan=lifespan)
 available_cameras = {}
 active_cameras = {}
 capture_count = 0
+pending_transfers = []
 mqtt_client = None
 
 # --- WebSocket Manager ---
@@ -250,6 +251,14 @@ class CaptureAllRequest(BaseModel):
     shutter_speed: str | None = None
     autofocus: bool | None = None
     captures: list[PerCameraCaptureSettings] | None = None
+
+class SFTPConfig(BaseModel):
+    enabled: bool
+    host: str
+    port: int = 22
+    username: str
+    password: str
+    remote_path: str
 
 
 # --- Static Files and Templates ---
@@ -400,7 +409,7 @@ async def perform_global_capture(request: CaptureAllRequest, source: str = "Unkn
             # Format: PREFIX_WxH_CAM_TIME.jpg
             filename = f"{safe_prefix}_{width}x{height}_{camera_path.replace('/', '_')}_{capture_time}.jpg"
             save_path = current_save_dir / filename
-
+            
             # Apply other settings (AF, Shutter)
             if isinstance(camera, PiCamera):
                 if capture_req.autofocus is not None:
@@ -477,6 +486,30 @@ async def perform_global_capture(request: CaptureAllRequest, source: str = "Unkn
 
         print(f"[{source}] Capture sequence complete. Total files saved: {len(captured_files)}", file=sys.stderr)
 
+        # --- Auto SFTP Transfer Logic ---
+        from sftp_handler import SFTPHandler
+        try:
+            handler = SFTPHandler()
+            is_enabled = handler.config and handler.config.get('enabled', False)
+            
+            global pending_transfers
+            
+            if is_enabled:
+                if captured_files:
+                    pending_transfers.extend(captured_files)
+                    
+                    if len(pending_transfers) >= 10:
+                        print(f"[{source}] Triggering SFTP transfer for {len(pending_transfers)} files...", file=sys.stderr)
+                        batch = list(pending_transfers)
+                        pending_transfers.clear()
+                        asyncio.create_task(run_sftp_transfer(batch))
+            else:
+                if pending_transfers:
+                    print(f"[{source}] SFTP disabled. Clearing {len(pending_transfers)} pending items.", file=sys.stderr)
+                    pending_transfers.clear()
+        except Exception as e:
+            print(f"Error in SFTP logic: {e}", file=sys.stderr)
+
     finally:
         # 4. Revert all settings
         print(f"[{source}] Reverting all camera settings...", file=sys.stderr)
@@ -499,6 +532,21 @@ async def perform_global_capture(request: CaptureAllRequest, source: str = "Unkn
                      camera.set_autofocus(autofocus)
 
     return captured_files
+
+async def run_sftp_transfer(file_list):
+    """Runs the SFTP transfer in a separate thread/task."""
+    from sftp_handler import SFTPHandler
+    
+    def _transfer():
+        try:
+            handler = SFTPHandler()
+            if handler.config and handler.config.get('enabled', False): 
+                handler.upload_files(file_list)
+        except Exception as e:
+            print(f"SFTP Transfer Error: {e}", file=sys.stderr)
+
+    # Run blocking SFTP IO in a thread
+    await asyncio.to_thread(_transfer)
 
 # --- Video Streaming Generator ---
 async def stream_generator(camera_path: str, quality: int = 80, max_width: int = 1280):
@@ -600,8 +648,12 @@ async def read_root(request: Request):
 async def grid_view(request: Request):
     return templates.TemplateResponse("grid.html", {"request": request, "active_page": "grid"})
 
+@app.get("/sftp", response_class=HTMLResponse)
+async def sftp_view(request: Request):
+    return templates.TemplateResponse("sftp.html", {"request": request, "active_page": "sftp"})
+
 @app.get("/editor", response_class=HTMLResponse)
-async def editor(request: Request):
+async def editor_view(request: Request):
     return templates.TemplateResponse("editor.html", {"request": request, "active_page": "editor"})
 
 @app.get("/api/config", response_class=PlainTextResponse)
@@ -897,9 +949,61 @@ async def capture_all_images(request: CaptureAllRequest):
     captured_files = await perform_global_capture(request, source="WebUI")
     
     if captured_files is None:
-         raise HTTPException(status_code=404, detail="No active cameras to capture from.")
+        raise HTTPException(status_code=500, detail="Capture failed")
+        
+    return JSONResponse({
+        "status": "success", 
+        "message": f"Captured {len(captured_files)} images", 
+        "files": [str(pathlib.Path(f).name) for f in captured_files]
+    })
 
-    if not captured_files:
+@app.get("/api/sftp_config")
+async def get_sftp_config_endpoint():
+    from sftp_handler import SFTP_CONFIG_PATH
+    import json
+    if not os.path.exists(SFTP_CONFIG_PATH):
+        return JSONResponse({})
+    
+    try:
+        with open(SFTP_CONFIG_PATH, 'r') as f:
+            config = json.load(f)
+            # Mask password
+            if 'password' in config:
+                config['password'] = "********"
+            return config
+    except Exception as e:
+        print(f"Error loading SFTP config: {e}", file=sys.stderr)
+        raise HTTPException(status_code=500, detail="Error loading config")
+
+@app.post("/api/sftp_config")
+async def save_sftp_config_endpoint(config: SFTPConfig):
+    from sftp_handler import SFTP_CONFIG_PATH
+    import json
+    
+    try:
+        # Load existing to check for password update if it is masked
+        existing_pass = None
+        if os.path.exists(SFTP_CONFIG_PATH):
+             with open(SFTP_CONFIG_PATH, 'r') as f:
+                  load_c = json.load(f)
+                  existing_pass = load_c.get('password')
+        
+        # Prepare data
+        data = config.dict()
+        
+        # If password is mask ********, keep existing
+        if data['password'] == "********" and existing_pass:
+             data['password'] = existing_pass
+             
+        with open(SFTP_CONFIG_PATH, 'w') as f:
+            json.dump(data, f, indent=4)
+            
+        print(f"SFTP Config saved. Enabled: {data['enabled']}", file=sys.stderr)
+        return JSONResponse({"status": "success", "message": "SFTP Configuration saved"})
+        
+    except Exception as e:
+        print(f"Error saving SFTP config: {e}", file=sys.stderr)
+        raise HTTPException(status_code=500, detail=str(e))
         raise HTTPException(status_code=500, detail="No images were captured.")
 
     return JSONResponse({
