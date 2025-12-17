@@ -68,6 +68,8 @@ class SFTPHandler:
                 print(f"Uploading {filename}...", file=sys.stderr)
                 try:
                     sftp.put(local_path, filename)
+                    print(f"Successfully uploaded {filename}. Deleting local file...", file=sys.stderr)
+                    os.remove(local_path)
                 except Exception as e:
                     print(f"Failed to upload {filename}: {e}", file=sys.stderr)
                     success = False
