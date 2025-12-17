@@ -15,6 +15,7 @@ from pydantic import BaseModel
 import uvicorn
 import piexif # Import piexif
 import sys  # Import sys
+import socket # Import socket
 from typing import Optional
 
 # Import camera handling logic
@@ -108,7 +109,8 @@ async def mqtt_callback(data):
                 "timestamp": time.time()
             }
             if mqtt_client:
-                mqtt_client.publish("dataset_collector/capture/finished", json.dumps(confirmation_payload))
+                hostname = socket.gethostname()
+                mqtt_client.publish(f"dataset_collector/{hostname}/capture/finished", json.dumps(confirmation_payload))
 
     except Exception as e:
         print(f"Error executing MQTT capture: {e}", file=sys.stderr)
@@ -119,7 +121,8 @@ async def mqtt_callback(data):
                 "error": str(e),
                 "timestamp": time.time()
             }
-             mqtt_client.publish("dataset_collector/capture/finished", json.dumps(error_payload))
+             hostname = socket.gethostname()
+             mqtt_client.publish(f"dataset_collector/{hostname}/capture/finished", json.dumps(error_payload))
 
 
 @asynccontextmanager
@@ -167,7 +170,8 @@ async def lifespan(app: FastAPI):
     active_camera_context = None
 
     loop = asyncio.get_running_loop()
-    mqtt_client = MQTTClientWrapper(broker, port, topic, mqtt_callback, loop, username, password, mqtt_log_callback)
+    hostname = socket.gethostname()
+    mqtt_client = MQTTClientWrapper(broker, port, topic, mqtt_callback, loop, username, password, mqtt_log_callback, hostname)
     mqtt_client.start()
     
     yield

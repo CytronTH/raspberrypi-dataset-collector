@@ -4,7 +4,7 @@ import sys
 import json
 
 class MQTTClientWrapper:
-    def __init__(self, broker, port, topic, callback, loop, username=None, password=None, log_callback=None):
+    def __init__(self, broker, port, topic, callback, loop, username=None, password=None, log_callback=None, hostname="localhost"):
         self.broker = broker
         self.port = port
         self.topic = topic
@@ -13,6 +13,7 @@ class MQTTClientWrapper:
         self.username = username
         self.password = password
         self.log_callback = log_callback
+        self.hostname = hostname
         self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
         self.client.on_connect = self.on_connect
         self.client.on_message = self.on_message
@@ -34,7 +35,7 @@ class MQTTClientWrapper:
             
             # Publish Online Status
             try:
-                client.publish("dataset_collector/status", payload=json.dumps({"status": "online"}), retain=True)
+                client.publish(f"dataset_collector/{self.hostname}/status", payload=json.dumps({"status": "online"}), retain=True)
             except Exception as e:
                 print(f"Failed to publish online status: {e}", file=sys.stderr)
 
@@ -83,7 +84,7 @@ class MQTTClientWrapper:
                     self.client.username_pw_set(self.username, self.password)
                 
                 # Set Last Will and Testament (LWT)
-                self.client.will_set("dataset_collector/status", payload=json.dumps({"status": "offline"}), retain=True)
+                self.client.will_set(f"dataset_collector/{self.hostname}/status", payload=json.dumps({"status": "offline"}), retain=True)
 
                 self.client.connect(self.broker, self.port, 60)
                 self.client.loop_start()
@@ -95,7 +96,7 @@ class MQTTClientWrapper:
         if self.running:
             # Publish Offline Status (Graceful)
             try:
-                self.client.publish("dataset_collector/status", payload=json.dumps({"status": "offline"}), retain=True)
+                self.client.publish(f"dataset_collector/{self.hostname}/status", payload=json.dumps({"status": "offline"}), retain=True)
             except Exception as e:
                 print(f"Failed to publish offline status: {e}", file=sys.stderr)
                 
