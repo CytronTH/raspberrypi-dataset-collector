@@ -102,15 +102,18 @@ def generate_default_config(config, detected_cameras):
             }
 
             if cam_info['type'] == 'pi':
+                # Use detected resolutions if available, else fallback
+                res_list = cam_info.get('resolutions', ['640x480', '800x600', '1280x720', '1920x1080', '2304x1296', '4608x2592'])
                 base_config.update({
-                    'resolutions': ['640x480', '800x600', '1280x720', '1920x1080', '2304x1296', '4608x2592'],
-                    'has_autofocus': True,
+                    'resolutions': res_list,
+                    'has_autofocus': cam_info.get('has_autofocus', True),
                     'shutter_speed_range': [30, 1000]
                 })
             else: # usb
+                res_list = cam_info.get('resolutions', ['640x480', '800x600', '1280x720', '1920x1080'])
                 base_config.update({
-                    'resolutions': ['640x480', '800x600', '1280x720', '1920x1080'],
-                    'has_autofocus': False,
+                    'resolutions': res_list,
+                    'has_autofocus': cam_info.get('has_autofocus', False),
                     'shutter_speed_range': "unavailable"
                 })
             
@@ -121,10 +124,25 @@ def generate_default_config(config, detected_cameras):
             # even for existing config entries, as they might be missing from old files.
             # We don't mark config_changed=True here unless we want to force a save of these properties.
             # Let's force save if they are missing to avoid future lookups failing.
+            # Ensure runtime properties are up to date
             current_cam = config['cameras'][cam_key]
+            
+            # Update max dimensions
             if 'max_width' not in current_cam and 'max_width' in cam_info:
                  current_cam['max_width'] = cam_info['max_width']
                  current_cam['max_height'] = cam_info['max_height']
+                 config_changed = True
+
+            # Update resolutions if detected varies from config (e.g. lens change or driver update)
+            detected_res = cam_info.get('resolutions')
+            if detected_res and current_cam.get('resolutions') != detected_res:
+                print(f"Updating resolutions for {cam_key} to match detected capabilities.", file=sys.stderr)
+                current_cam['resolutions'] = detected_res
+                config_changed = True
+            
+            # Update autofocus capability if changed
+            if 'has_autofocus' in cam_info and current_cam.get('has_autofocus') != cam_info['has_autofocus']:
+                 current_cam['has_autofocus'] = cam_info['has_autofocus']
                  config_changed = True
     
     # Remove disconnected cameras
