@@ -1,4 +1,5 @@
-<img width="2816" height="1536" alt="logo" src="https://github.com/user-attachments/assets/f77186d2-3618-454b-943b-a36dc161fadf" />
+<img width="2816" height="1536" alt="logo v2" src="https://github.com/user-attachments/assets/279d06b5-e939-4d9a-896a-33171f34e926" />
+
 
 Dataset Collector for Raspberry Pi
 
