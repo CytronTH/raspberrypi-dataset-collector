@@ -1,6 +1,8 @@
 
 import cv2
 import time
+import piexif
+from fractions import Fraction
 import pathlib
 import os
 import glob
@@ -217,7 +219,26 @@ class PiCamera(CameraBase):
     def start(self):
         if self.is_running:
             return
-        config = self.picam2.create_video_configuration(main={"size": (self.width, self.height)})
+
+        # Adjust preview resolution to match the Aspect Ratio of the preferred (capture) resolution
+        # This prevents the camera from cropping the sensor to fit a mismatched preview AR (e.g. 16:9 preview vs 4:3 sensor)
+        preview_width = self.width
+        preview_height = self.height
+
+        if self.preferred_resolution:
+            pref_w, pref_h = self.preferred_resolution
+            if pref_h > 0:
+                target_ar = pref_w / pref_h
+                # Keep height fixed (e.g., 720p), adjust width to match AR
+                new_width = int(preview_height * target_ar)
+                # Ensure width is even
+                if new_width % 2 != 0:
+                    new_width += 1
+                
+                print(f"[PiCamera {self.camera_id}] Adjusting preview from {preview_width}x{preview_height} to {new_width}x{preview_height} to match AR of {pref_w}x{pref_h}", file=sys.stderr)
+                preview_width = new_width
+
+        config = self.picam2.create_video_configuration(main={"size": (preview_width, preview_height)})
         self.picam2.configure(config)
         self.picam2.start()
         self.picam2.set_overlay(None)
@@ -308,11 +329,40 @@ class PiCamera(CameraBase):
             self.picam2.start()
             # self.is_running = True # internal state is managed by ensuring we stop faithfully later
             reconfigured = True
+            
+            # CRITICAL: Apply controls to the new STILL configuration so they take effect for the capture
+            self._apply_current_controls()
         
         try:
             # We use capture_file which streams directly to disk via encoder
             # This avoids loading the raw array into Python memory
             self.picam2.capture_file(filepath)
+
+            try:
+                # Retrieve metadata from the most recent capture
+                metadata = self.picam2.capture_metadata()
+                exposure_time_us = metadata.get("ExposureTime", 0)
+                
+                if exposure_time_us > 0:
+                    exposure_time_sec = exposure_time_us / 1000000.0
+                    frac = Fraction(exposure_time_sec).limit_denominator(1000000)
+                    
+                    # Load existing EXIF data (or create new if empty/corrupt, though capture_file usually adds none or minimal)
+                    try:
+                        exif_dict = piexif.load(filepath)
+                    except Exception:
+                        exif_dict = {"0th": {}, "Exif": {}, "GPS": {}, "1st": {}, "thumbnail": None}
+
+                    # exposure_time_sec is float, but EXIF expects rational (num, den)
+                    # 33434 is the tag for ExposureTime
+                    exif_dict["Exif"][piexif.ExifIFD.ExposureTime] = (frac.numerator, frac.denominator)
+                    
+                    exif_bytes = piexif.dump(exif_dict)
+                    piexif.insert(exif_bytes, filepath)
+                    print(f"[PiCamera] Added Shutter Speed: {frac}s ({exposure_time_us}us) to {filepath}", file=sys.stderr)
+            
+            except Exception as e:
+                print(f"[PiCamera] Warning: Failed to write metadata: {e}", file=sys.stderr)
         finally:
             if reconfigured:
                 print(f"[PiCamera] Restoring Video Mode: {original_width}x{original_height}", file=sys.stderr)
@@ -324,6 +374,28 @@ class PiCamera(CameraBase):
                 self.picam2.configure(config)
                 self.picam2.start()
                 self.is_running = True # Ensure flag is reset to True as we restarted video
+                
+                # Re-apply controls (Shutter Speed, Autofocus) since restart resets them
+                self._apply_current_controls()
+
+    def _apply_current_controls(self):
+        """Applies the current internal state (shutter speed, manual/auto focus) to the running camera."""
+        if not self.picam2:
+            return
+
+        # 1. Autofocus / Lens Position
+        if self._has_autofocus:
+             if self._autofocus_enabled:
+                  self.picam2.set_controls({"AfMode": controls.AfModeEnum.Continuous})
+             else:
+                  # Restore the last known manual focus value
+                  try:
+                       self.picam2.set_controls({"AfMode": controls.AfModeEnum.Manual, "LensPosition": self._manual_focus_value})
+                  except Exception as e:
+                       print(f"[PiCamera] Failed to restore lens position: {e}", file=sys.stderr)
+
+        # 2. Shutter Speed
+        self.set_shutter_speed(self._shutter_speed)
 
         return filepath
 
@@ -338,6 +410,18 @@ class PiCamera(CameraBase):
             print("Starting autofocus cycle...", file=sys.stderr)
             self.picam2.autofocus_cycle()
         return self.capture_array()
+
+    def autofocus_cycle(self):
+        """Triggers an autofocus cycle if supported."""
+        if self.picam2 and self._has_autofocus:
+             # run_cycle: perform a full scan
+             try:
+                 print("[PiCamera] Running Autofocus Cycle...", file=sys.stderr)
+                 return self.picam2.autofocus_cycle()
+             except Exception as e:
+                 print(f"[PiCamera] Autofocus cycle failed: {e}", file=sys.stderr)
+                 return False
+        return False
 def detect_usb_cameras():
     """Detects USB cameras by scanning /dev/v4l/by-id/."""
     usb_cameras = {}
