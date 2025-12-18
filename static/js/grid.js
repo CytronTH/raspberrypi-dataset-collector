@@ -617,27 +617,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // --- MQTT & WebSocket Logic ---
 
-    function updateMqttStatus() {
-        const mqttDot = document.getElementById('mqtt-status-dot');
-        if (!mqttDot) return;
-
-        fetch('/api/mqtt_status')
-            .then(response => response.json())
-            .then(data => {
-                if (data.connected) {
-                    mqttDot.classList.remove('disconnected');
-                    mqttDot.classList.add('connected');
-                } else {
-                    mqttDot.classList.remove('connected');
-                    mqttDot.classList.add('disconnected');
-                }
-            })
-            .catch(err => {
-                console.error("Error fetching MQTT status:", err);
-                mqttDot.classList.remove('connected');
-                mqttDot.classList.add('disconnected');
-            });
-    }
+    // updateMqttStatus handled by monitor.js
 
     let ws = null;
     function connectWebSocket() {
@@ -649,10 +629,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         ws.onopen = () => {
             console.log("WebSocket connected");
-            if (wsDot) {
-                wsDot.classList.remove('disconnected');
-                wsDot.classList.add('connected');
-            }
+            // Status dot handled by monitor.js
         };
 
         ws.onmessage = (event) => {
@@ -666,10 +643,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         ws.onclose = () => {
             console.log("WebSocket disconnected, retrying in 2s...");
-            if (wsDot) {
-                wsDot.classList.remove('connected');
-                wsDot.classList.add('disconnected');
-            }
+            // Status dot handled by monitor.js
             setTimeout(connectWebSocket, 2000);
         };
 
@@ -770,7 +744,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Start
     loadCameras();
-    updateMqttStatus();
-    setInterval(updateMqttStatus, 5000);
+    // updateMqttStatus handled by monitor.js
     connectWebSocket();
 });

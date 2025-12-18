@@ -101,6 +101,18 @@ body {
     /* Ensure it takes no space */
 }
 
+.perf-mode-container {
+    padding: 12px 15px;
+    color: #ecf0f1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.side-menu.collapsed .perf-mode-container {
+    display: none;
+}
+
 .side-menu.collapsed li a {
     justify-content: center;
     padding-left: 0;
@@ -650,6 +662,7 @@ input:checked+.slider:before {
 .slider.round:before {
     border-radius: 50%;
 }
+
 /* Resolution Overlay */
 #resolution-overlay {
     z-index: 20;

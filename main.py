@@ -263,6 +263,7 @@ class SFTPConfig(BaseModel):
     username: str
     password: str
     remote_path: str
+    batch_size: int = 10
 
 
 # --- Static Files and Templates ---
@@ -502,8 +503,9 @@ async def perform_global_capture(request: CaptureAllRequest, source: str = "Unkn
                 if captured_files:
                     pending_transfers.extend(captured_files)
                     
-                    if len(pending_transfers) >= 10:
-                        print(f"[{source}] Triggering SFTP transfer for {len(pending_transfers)} files...", file=sys.stderr)
+                    batch_size = handler.config.get('batch_size', 10)
+                    if len(pending_transfers) >= batch_size:
+                        print(f"[{source}] Triggering SFTP transfer for {len(pending_transfers)} files (Batch Size: {batch_size})...", file=sys.stderr)
                         batch = list(pending_transfers)
                         pending_transfers.clear()
                         asyncio.create_task(run_sftp_transfer(batch))
