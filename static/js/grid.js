@@ -638,6 +638,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const source = data.source || "WS";
                 // Log all new files, including WebUI, to show individual file progress
                 logMessage(`[${source}] Saved: ${data.filename}`);
+            } else if (data.type === 'file_deleted') {
+                logMessage(`[System] Auto-Deleted: ${data.filename}`);
             }
         };
 

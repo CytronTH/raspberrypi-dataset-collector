@@ -6,13 +6,13 @@ cameras:
     max_height: 2592
     max_width: 4608
     path: 0
-    resolution: 4056x3040
+    resolution: 1332x990
     resolutions:
     - 1332x990
     - 2028x1080
     - 2028x1520
     - 4056x3040
-    shutter_speed: 1/30s
+    shutter_speed: Auto
     shutter_speed_range:
     - 30
     - 1000

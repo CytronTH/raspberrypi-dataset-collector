@@ -953,6 +953,26 @@ document.addEventListener('DOMContentLoaded', () => {
                     knownFiles.add(data.filename);
                     addToGallery(data.filename);
                 }
+            } else if (data.type === 'file_deleted') {
+                const filename = data.filename;
+                logMessage(`[System] Auto-Deleted: ${filename}`);
+
+                // Remove from gallery UI
+                const el = document.querySelector(`div[data-filename="${filename}"]`);
+                if (el) el.remove();
+
+                // Cleanup internal state
+                if (knownFiles.has(filename)) knownFiles.delete(filename);
+                if (selectedFiles.has(filename)) {
+                    selectedFiles.delete(filename);
+                    updateDeleteButton(); // Refresh counts
+                }
+
+                // Show placeholder if empty
+                if (galleryContainer && galleryContainer.children.length === 0 && galleryPlaceholder) {
+                    galleryPlaceholder.style.display = 'block';
+                }
+
             } else if (data.type === 'mqtt_log') {
                 const logBox = document.getElementById('mqtt-log-box');
                 if (logBox) {

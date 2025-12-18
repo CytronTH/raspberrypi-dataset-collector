@@ -341,6 +341,9 @@ class PiCamera(CameraBase):
             self._apply_current_controls()
         
         try:
+            # Explicitly ensure filepath is a string for piexif
+            filepath = str(filepath)
+            
             # We use capture_file which streams directly to disk via encoder
             # This avoids loading the raw array into Python memory
             self.picam2.capture_file(filepath)

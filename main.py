@@ -366,7 +366,8 @@ async def perform_global_capture(request: CaptureAllRequest, source: str = "Unkn
 
     try:
         # 1. Determine Settings for All Cameras
-        print(f"[{source}] Starting capture sequence for cameras: {[r.camera_path for r in capture_requests]}", file=sys.stderr)
+        print(f"[{source}] !!! ENTERING CAPTURE SEQUENCE !!!", file=sys.stderr, flush=True)
+        print(f"[{source}] Starting capture sequence for cameras: {[r.camera_path for r in capture_requests]}", file=sys.stderr, flush=True)
         
         # 2. Capture Sequentially directly to file (Low Memory Usage)
         for capture_req in capture_requests:
@@ -489,7 +490,8 @@ async def perform_global_capture(request: CaptureAllRequest, source: str = "Unkn
                 if save_path.exists() and save_path.stat().st_size == 0:
                      save_path.unlink()
 
-        print(f"[{source}] Capture sequence complete. Total files saved: {len(captured_files)}", file=sys.stderr)
+        print(f"[{source}] Capture sequence complete. Total files saved: {len(captured_files)}", file=sys.stderr, flush=True)
+        print(f"[{source}] !!! CHECKING SFTP LOGIC !!!", file=sys.stderr, flush=True)
 
         # --- Auto SFTP Transfer Logic ---
         from sftp_handler import SFTPHandler
@@ -497,15 +499,20 @@ async def perform_global_capture(request: CaptureAllRequest, source: str = "Unkn
             handler = SFTPHandler()
             is_enabled = handler.config and handler.config.get('enabled', False)
             
+            
             global pending_transfers
             
+            print(f"[{source}] SFTP Debug: ConfigLoaded={bool(handler.config)}, Enabled={is_enabled}, Captured={len(captured_files)}, PendingBefore={len(pending_transfers)}", file=sys.stderr)
+
             if is_enabled:
                 if captured_files:
                     pending_transfers.extend(captured_files)
                     
                     batch_size = handler.config.get('batch_size', 10)
+                    print(f"[{source}] SFTP Check: Pending={len(pending_transfers)}, BatchSize={batch_size}, Enabled={is_enabled}", file=sys.stderr)
+                    
                     if len(pending_transfers) >= batch_size:
-                        print(f"[{source}] Triggering SFTP transfer for {len(pending_transfers)} files (Batch Size: {batch_size})...", file=sys.stderr)
+                        print(f"[{source}] Triggering SFTP transfer for {len(pending_transfers)} files...", file=sys.stderr)
                         batch = list(pending_transfers)
                         pending_transfers.clear()
                         asyncio.create_task(run_sftp_transfer(batch))
@@ -543,16 +550,33 @@ async def run_sftp_transfer(file_list):
     """Runs the SFTP transfer in a separate thread/task."""
     from sftp_handler import SFTPHandler
     
+    async def _broadcast_deletions(deleted_files):
+         if not deleted_files: return
+         for fpath in deleted_files:
+             try:
+                rel_path = str(pathlib.Path(fpath).relative_to(CAPTURE_DIR_BASE))
+             except ValueError:
+                rel_path = str(pathlib.Path(fpath).name)
+                
+             await manager.broadcast({
+                 "type": "file_deleted",
+                 "filename": rel_path
+             })
+
     def _transfer():
         try:
             handler = SFTPHandler()
             if handler.config and handler.config.get('enabled', False): 
-                handler.upload_files(file_list)
+                return handler.upload_files(file_list) # Returns list of deleted files
+            return []
         except Exception as e:
             print(f"SFTP Transfer Error: {e}", file=sys.stderr)
+            return []
 
     # Run blocking SFTP IO in a thread
-    await asyncio.to_thread(_transfer)
+    deleted = await asyncio.to_thread(_transfer)
+    if deleted:
+         await _broadcast_deletions(deleted)
 
 # --- Video Streaming Generator ---
 async def stream_generator(camera_path: str, quality: int = 80, max_width: int = 1280):
@@ -788,100 +812,55 @@ async def get_shutter_speed_range(camera_path: str):
     return available_cameras[camera_path].get('shutter_speed_range', [0, 0])
 
 @app.post("/api/capture")
+@app.post("/api/capture")
 async def capture_image(request: CaptureRequest):
     try:
+        # Convert single CaptureRequest to PerCameraCaptureSettings
+        single_cap_request = PerCameraCaptureSettings(
+            camera_path=request.camera_path,
+            resolution=request.resolution,
+            shutter_speed=request.shutter_speed,
+            autofocus=request.autofocus,
+            manual_focus=request.manual_focus,
+            subfolder=request.subfolder,
+            prefix=request.prefix
+        )
         
-        # Ensure camera is active
-        if request.camera_path not in active_cameras:
-            raise HTTPException(status_code=404, detail=f"Camera {request.camera_path} not active.")
+        # Wrap in CaptureAllRequest
+        global_request = CaptureAllRequest(
+            captures=[single_cap_request]
+        )
         
-        camera = active_cameras[request.camera_path]
-
-        # Generate filename and path
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
-        prefix = request.prefix if request.prefix else get_default_prefix()
+        # Delegate to the centralized logic (which handles SFTP, metadata, etc.)
+        captured_files = await perform_global_capture(global_request, source="WebUI_Single")
         
-        # Determine subfolder
-        subfolder_path = CAPTURE_DIR_BASE / "images"
-        if request.subfolder:
-            subfolder_path = subfolder_path / request.subfolder
-        subfolder_path.mkdir(parents=True, exist_ok=True)
-
-        if request.resolution:
+        if not captured_files:
+             raise HTTPException(status_code=500, detail="Capture failed or no files produced.")
+             
+        # Return success with the first file (to maintain partial API compatibility if needed, 
+        # though original returned status+message. We can return that.)
+        # Original response format was typically implicitly successful 200 OK. 
+        # But we should return JSON.
+        
+        # Helper to get relative path
+        def get_rel_path(p):
             try:
-                width, height = map(int, request.resolution.split('x'))
-                # For PiCamera, we pass this to capture_to_file instead of setting it globally
-                if not isinstance(camera, PiCamera): 
-                    camera.set_resolution(width, height)
+                return str(pathlib.Path(p).relative_to(CAPTURE_DIR_BASE))
             except ValueError:
-                pass # Ignore invalid resolution format
+                return str(pathlib.Path(p).name)
+
+        files_list = [get_rel_path(f) for f in captured_files]
+        first_file = files_list[0] if files_list else None
         
-        # Fallback to current/preferred resolution if not set
-        if not width or not height:
-             if camera.preferred_resolution:
-                  width, height = camera.preferred_resolution
-             else:
-                  width = camera.width
-                  height = camera.height
-
-        filename = f"{prefix}_{width}x{height}_{timestamp}_{request.camera_path.replace('/', '_')}.jpg"
-        filepath = subfolder_path / filename
-        if request.shutter_speed:
-            s_speed = 0
-            if isinstance(request.shutter_speed, str) and request.shutter_speed.lower() == "auto":
-                s_speed = 0
-            else:
-                try:
-                    s_speed = int(request.shutter_speed)
-                except ValueError:
-                    s_speed = 0 # Default to auto on error
-            camera.set_shutter_speed(s_speed)
-        if request.autofocus is not None:
-            if isinstance(camera, PiCamera):
-                camera.set_autofocus(request.autofocus)
-        if request.manual_focus is not None:
-            if isinstance(camera, PiCamera):
-                camera.set_manual_focus(request.manual_focus)
-
-        # Trigger capture
-        try:
-            if request.autofocus:
-                 # Trigger AF cycle if requested
-                 if isinstance(camera, PiCamera) and camera._has_autofocus:
-                      camera.autofocus_cycle() # we don't need the return frame anymore
-            
-            # Use the new direct-to-file method
-            camera.capture_to_file(filepath, width=width, height=height)
-            
-            # Verify file exists and has size
-            if not os.path.exists(filepath) or os.path.getsize(filepath) == 0:
-                 raise RuntimeError("Capture failed: Output file is empty or missing")
-                 
-        except Exception as e:
-            # Clean up empty file if it exists
-            if os.path.exists(filepath):
-                os.remove(filepath)
-            raise e
-
-        # Notify MQTT (Async)
-        if hasattr(filepath, 'relative_to'):
-             relative_path = filepath.relative_to(CAPTURE_DIR_BASE)
-        else:
-             relative_path = pathlib.Path(filepath).relative_to(CAPTURE_DIR_BASE)
-
-        # Return the response format expected by script.js
-        # (perform_global_capture already handled saving, metadata, and WS broadcast)
         return JSONResponse({
             "status": "success", 
-            "message": f"Image saved to {filename}", 
-            "capture_count": capture_count, 
-            "filename": str(relative_path)
+            "message": "Capture successful", 
+            "files": files_list,
+            "filename": first_file # Key required by script.js
         })
 
-    except HTTPException:
-        raise
     except Exception as e:
-        print(f"Error in capture_image: {e}", file=sys.stderr)
+        print(f"Error in /api/capture: {e}", file=sys.stderr, flush=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 class SaveCameraSettingsRequest(BaseModel):
