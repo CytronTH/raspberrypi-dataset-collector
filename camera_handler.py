@@ -238,6 +238,13 @@ class PiCamera(CameraBase):
                 print(f"[PiCamera {self.camera_id}] Adjusting preview from {preview_width}x{preview_height} to {new_width}x{preview_height} to match AR of {pref_w}x{pref_h}", file=sys.stderr)
                 preview_width = new_width
 
+        # Defensive stop: Ensure libcamera state is clean before configuring
+        try:
+            if self.picam2:
+                self.picam2.stop()
+        except Exception: 
+            pass
+
         config = self.picam2.create_video_configuration(main={"size": (preview_width, preview_height)})
         self.picam2.configure(config)
         self.picam2.start()
@@ -396,8 +403,6 @@ class PiCamera(CameraBase):
 
         # 2. Shutter Speed
         self.set_shutter_speed(self._shutter_speed)
-
-        return filepath
 
     def capture_array(self):
         """Captures a single frame. Renamed from capture_still for clarity."""
