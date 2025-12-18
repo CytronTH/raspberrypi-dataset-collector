@@ -1,5 +1,6 @@
 <img width="2816" height="1536" alt="logo" src="https://github.com/user-attachments/assets/f77186d2-3618-454b-943b-a36dc161fadf" />
-# Dataset Collector for Raspberry Pi
+
+Dataset Collector for Raspberry Pi
 
 A web-based interface for capturing and managing datasets using Raspberry Pi cameras (and USB cameras). This tool allows you to control multiple cameras, view live feeds, trigger captures via a web UI or MQTT, and automatically transfer files to a remote server via SFTP.
 
