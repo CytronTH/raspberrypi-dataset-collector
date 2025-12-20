@@ -4,7 +4,10 @@ import os
 import sys
 import logging
 
-SFTP_CONFIG_PATH = "/home/pi/dataset_collector/sftp_config.json"
+import pathlib
+
+BASE_DIR = pathlib.Path(__file__).parent.absolute()
+SFTP_CONFIG_PATH = BASE_DIR / "sftp_config.json"
 
 class SFTPHandler:
     def __init__(self):

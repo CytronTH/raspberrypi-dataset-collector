@@ -1,6 +1,7 @@
 import psutil
 import shutil
 import subprocess
+import os
 
 def get_cpu_usage():
     """Returns CPU usage percentage."""
@@ -44,6 +45,6 @@ def get_system_stats():
     return {
         "cpu": get_cpu_usage(),
         "ram": get_ram_usage(),
-        "disk": get_disk_usage("/home/pi"),
+        "disk": get_disk_usage(os.getcwd()),
         "temp": get_cpu_temp()
     }

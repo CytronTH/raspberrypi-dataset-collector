@@ -4,7 +4,10 @@ import os
 import platform
 import multiprocessing
 
-CONFIG_PATH = "/home/pi/dataset_collector/camera_config.yaml"
+import pathlib
+
+BASE_DIR = pathlib.Path(__file__).parent.absolute()
+CONFIG_PATH = BASE_DIR / "camera_config.yaml"
 
 def detect_system_performance():
     """
@@ -159,7 +162,7 @@ def generate_default_config(config, detected_cameras):
     return config
     
 
-MQTT_CONFIG_PATH = "/home/pi/dataset_collector/mqtt_config.json"
+MQTT_CONFIG_PATH = BASE_DIR / "mqtt_config.json"
 
 def load_mqtt_config():
     """Loads the MQTT configuration from the JSON file."""
