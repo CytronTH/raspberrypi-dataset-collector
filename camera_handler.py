@@ -430,6 +430,16 @@ class PiCamera(CameraBase):
                  print(f"[PiCamera] Autofocus cycle failed: {e}", file=sys.stderr)
                  return False
         return False
+
+    def get_lens_position(self):
+        """Returns the current lens position from metadata if available."""
+        if self.picam2 and self._has_autofocus:
+            try:
+                metadata = self.picam2.capture_metadata()
+                return metadata.get("LensPosition", 0.0)
+            except Exception:
+                return 0.0
+        return self._manual_focus_value
 def detect_usb_cameras():
     """Detects USB cameras by scanning /dev/v4l/by-id/."""
     usb_cameras = {}

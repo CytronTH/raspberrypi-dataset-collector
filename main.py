@@ -791,8 +791,10 @@ async def get_camera_info(camera_path: str):
         "friendly_name": cam_info.get('friendly_name'),
         "type": cam_info.get('type'),
         "has_autofocus": cam_info.get('has_autofocus', False),
+        "has_autofocus": cam_info.get('has_autofocus', False),
         "autofocus_enabled": camera._autofocus_enabled if camera and isinstance(camera, PiCamera) else None,
-        "manual_focus_value": camera._manual_focus_value if camera and isinstance(camera, PiCamera) else None
+        "manual_focus_value": camera._manual_focus_value if camera and isinstance(camera, PiCamera) else None,
+        "current_lens_position": camera.get_lens_position() if camera and isinstance(camera, PiCamera) else None
     }
 
 @app.get("/api/cameras")
