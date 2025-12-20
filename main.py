@@ -29,7 +29,7 @@ from system_monitor import get_system_stats
 
 # --- Constants ---
 # Define a safe base directory for all captures
-CAPTURE_DIR_BASE = pathlib.Path("/home/pi/dataset_collector/captures")
+CAPTURE_DIR_BASE = pathlib.Path(__file__).parent.absolute() / "captures"
 
 from contextlib import asynccontextmanager
 
