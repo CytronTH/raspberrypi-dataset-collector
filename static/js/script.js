@@ -1147,8 +1147,17 @@ document.addEventListener('DOMContentLoaded', () => {
                         currentFocusValueSpan.textContent = info.current_lens_position.toFixed(2);
                     }
                     if (liveFocusDisplay) liveFocusDisplay.classList.remove('hidden');
+
+                    // Update Popup if visible
+                    const popupVal = document.getElementById('popup-current-focus-value');
+                    const popupDisplay = document.getElementById('popup-live-focus-display');
+                    if (popupVal) popupVal.textContent = info.current_lens_position.toFixed(2);
+                    if (popupDisplay) popupDisplay.classList.remove('hidden');
+
                 } else {
                     if (liveFocusDisplay) liveFocusDisplay.classList.add('hidden');
+                    const popupDisplay = document.getElementById('popup-live-focus-display');
+                    if (popupDisplay) popupDisplay.classList.add('hidden');
                 }
             } catch (e) {
                 console.error("Focus poll error:", e);
