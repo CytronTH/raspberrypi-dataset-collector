@@ -1127,4 +1127,69 @@ document.addEventListener('DOMContentLoaded', () => {
     // updateMqttStatus handled by monitor.js
     loadMqttConfig(); // Load settings
     loadCameras(); // Ensure this is called successfully
+    // --- Focus Polling Logic ---
+    let focusPollInterval = null;
+    const liveFocusDisplay = document.getElementById('live-focus-display');
+    const currentFocusValueSpan = document.getElementById('current-focus-value');
+
+    function startFocusPolling(cameraPath) {
+        if (focusPollInterval) clearInterval(focusPollInterval);
+
+        const updateFocus = async () => {
+            if (!cameraSelect || cameraSelect.value !== cameraPath) return; // Stop if changed
+            try {
+                const response = await fetch(`/api/camera_info/${cameraPath}`);
+                if (!response.ok) return;
+                const info = await response.json();
+
+                if (info.current_lens_position !== undefined && info.current_lens_position !== null) {
+                    if (currentFocusValueSpan) {
+                        currentFocusValueSpan.textContent = info.current_lens_position.toFixed(2);
+                    }
+                    if (liveFocusDisplay) liveFocusDisplay.classList.remove('hidden');
+                } else {
+                    if (liveFocusDisplay) liveFocusDisplay.classList.add('hidden');
+                }
+            } catch (e) {
+                console.error("Focus poll error:", e);
+            }
+        };
+
+        // Initial call
+        updateFocus();
+        // Poll every 1 second
+        focusPollInterval = setInterval(updateFocus, 1000);
+    }
+
+    function stopFocusPolling() {
+        if (focusPollInterval) {
+            clearInterval(focusPollInterval);
+            focusPollInterval = null;
+        }
+        if (liveFocusDisplay) liveFocusDisplay.classList.add('hidden');
+    }
+
+    // Hook into camera selection
+    if (cameraSelect) {
+        const originalChangeHandler = cameraSelect.onchange; // If any? No, we used addEventListener.
+        // We added an event listener in the main block. We should append this logic there or just add another listener.
+        // Adding another listener is fine.
+        cameraSelect.addEventListener('change', () => {
+            const selectedCameraPath = cameraSelect.value;
+            if (selectedCameraPath) {
+                // We need to know if it supports AF to decide whether to poll?
+                // The poll logic itself checks if value is returned.
+                // But we can check availableCameras first to be cleaner.
+                const camInfo = availableCameras[selectedCameraPath];
+                if (camInfo && camInfo.has_autofocus) {
+                    startFocusPolling(selectedCameraPath);
+                } else {
+                    stopFocusPolling();
+                }
+            } else {
+                stopFocusPolling();
+            }
+        });
+    }
+
 });
