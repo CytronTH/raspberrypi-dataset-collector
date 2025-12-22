@@ -10,7 +10,7 @@ echo "=== Pi Zero 2W (Lite) Setup ==="
 # 1. Update System
 echo "[1/6] Updating system packages..."
 sudo apt-get update
-sudo apt-get install -y python3-venv python3-pip libopenblas-dev libopenjp2-7 libtiff-dev libjpeg-dev python3-picamera2
+sudo apt-get install -y python3-venv python3-pip libopenblas-dev libopenjp2-7 libtiff-dev libjpeg-dev python3-picamera2 python3-numpy
 
 # 2. Force Swap Configuration (Critical for Zero 2W)
 echo "[2/6] Configuring Swap Memory..."
