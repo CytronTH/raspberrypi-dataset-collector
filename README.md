@@ -43,11 +43,11 @@ A web-based interface for capturing and managing datasets using Raspberry Pi cam
 
 2.  **Run Setup Script:**
 
-    **Option A: For Raspberry Pi Zero 2 W (Lite Version)**
-    *Recommended for low-power devices. Enables swap memory and sets 720p resolution.*
+    **Option A: For Raspberry Pi Zero 2 W**
+    *Optimized for low-power devices. Uses system packages to skip compilation vs heavier pip installs. Enables swap.*
     ```bash
-    chmod +x setup_lite.sh
-    ./setup_lite.sh
+    chmod +x setup_zero.sh
+    ./setup_zero.sh
     ```
 
     **Option B: For Raspberry Pi 4 / 5 (Pro Version)**
