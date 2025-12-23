@@ -13,7 +13,7 @@ echo "[1/5] Installing system dependencies..."
 sudo apt-get update
 # Swapped specific libs for more generic/modern ones compatible with Trixie/Bookworm
 # Added python3-picamera2 python3-numpy python3-opencv python3-paramiko python3-yaml python3-pil as it is a system package, not on PyPI
-sudo apt-get install -y python3-venv python3-pip libopenblas-dev libopenjp2-7 libtiff-dev libjpeg-dev python3-picamera2 python3-numpy python3-opencv python3-paramiko python3-yaml python3-pil
+sudo apt-get install -y python3-venv python3-pip libopenblas-dev libopenjp2-7 libtiff-dev libjpeg-dev python3-picamera2 python3-numpy python3-opencv python3-paramiko python3-yaml python3-pil python3-websockets
 
 # 2. Increase Swap (Critical for limited RAM during install)
 echo "[2/5] Checking swap space..."
