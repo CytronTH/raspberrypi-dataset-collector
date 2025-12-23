@@ -1,10 +1,7 @@
 fastapi
-uvicorn[standard]
+uvicorn
 jinja2
-opencv-python-headless
 piexif
-pyyaml
 paho-mqtt>=2.0.0
 pydantic
 psutil
-paramiko
