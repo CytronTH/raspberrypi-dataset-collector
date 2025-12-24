@@ -17,10 +17,28 @@ sudo apt-get install -y python3-venv python3-pip libopenblas-dev libopenjp2-7 li
 
 # 2. Increase Swap (Critical for limited RAM during install)
 echo "[2/5] Checking swap space..."
-SWAP_SIZE=$(grep "CONF_SWAPSIZE" /etc/dphys-swapfile | cut -d= -f2)
+if [ ! -f /etc/dphys-swapfile ]; then
+    echo "dphys-swapfile not found. Installing..."
+    sudo apt-get install -y dphys-swapfile
+fi
+
+# Read current swap size, defaulting to 0 if not found
+SWAP_SIZE=$(grep "CONF_SWAPSIZE" /etc/dphys-swapfile 2>/dev/null | cut -d= -f2 || echo "0")
+# Sanitize input (remove spaces/newlines)
+SWAP_SIZE=$(echo "$SWAP_SIZE" | tr -d '[:space:]')
+
+if [ -z "$SWAP_SIZE" ]; then
+    SWAP_SIZE=0
+fi
+
 if [ "$SWAP_SIZE" -lt 1024 ]; then
     echo "Increasing swap to 1024MB for installation..."
-    sudo sed -i 's/CONF_SWAPSIZE=.*/CONF_SWAPSIZE=1024/' /etc/dphys-swapfile
+    # If conf exists, replace; if not, append.
+    if grep -q "CONF_SWAPSIZE" /etc/dphys-swapfile; then
+        sudo sed -i 's/^CONF_SWAPSIZE=.*/CONF_SWAPSIZE=1024/' /etc/dphys-swapfile
+    else
+        echo "CONF_SWAPSIZE=1024" | sudo tee -a /etc/dphys-swapfile
+    fi
     sudo /etc/init.d/dphys-swapfile restart
 fi
 
