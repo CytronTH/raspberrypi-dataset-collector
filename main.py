@@ -225,6 +225,7 @@ class CaptureRequest(BaseModel):
     prefix: str | None = "IMG"
     resolution: str | None = "1280x720"
     shutter_speed: str | None = "Auto"
+    iso: int | None = 0 # 0 = Auto
     autofocus: bool | None = None
     manual_focus: float | None = None
 
@@ -243,6 +244,7 @@ class PerCameraCaptureSettings(BaseModel):
     camera_path: str
     resolution: str | None = None
     shutter_speed: str | None = None
+    iso: int | None = None
     autofocus: bool | None = None
     manual_focus: float | None = None
     subfolder: str | None = None
@@ -253,6 +255,7 @@ class CaptureAllRequest(BaseModel):
     prefix: str | None = "IMG"
     resolution: str | None = None
     shutter_speed: str | None = None
+    iso: int | None = None
     autofocus: bool | None = None
     captures: list[PerCameraCaptureSettings] | None = None
 
@@ -349,6 +352,7 @@ async def perform_global_capture(request: CaptureAllRequest, source: str = "Unkn
             # Use request override OR config value OR defaults
             res = request.resolution or cam_config.get('resolution')
             shutter = request.shutter_speed or cam_config.get('shutter_speed')
+            iso = request.iso or cam_config.get('iso')
             af = request.autofocus if request.autofocus is not None else cam_config.get('autofocus_enabled')
             
             capture_requests.append(
@@ -356,6 +360,7 @@ async def perform_global_capture(request: CaptureAllRequest, source: str = "Unkn
                     camera_path=cam_path, 
                     resolution=res, 
                     shutter_speed=shutter,
+                    iso=iso,
                     autofocus=af
                 )
             )
@@ -431,6 +436,9 @@ async def perform_global_capture(request: CaptureAllRequest, source: str = "Unkn
                              s_speed = int(capture_req.shutter_speed)
                          except: s_speed = 0
                      camera.set_shutter_speed(s_speed)
+
+                if capture_req.iso is not None:
+                     camera.set_iso(capture_req.iso)
 
 
             # Perform Capture
@@ -543,6 +551,10 @@ async def perform_global_capture(request: CaptureAllRequest, source: str = "Unkn
                 autofocus = settings.get("autofocus_enabled")
                 if autofocus is not None and camera._autofocus_enabled != autofocus:
                      camera.set_autofocus(autofocus)
+
+                iso = settings.get("iso")
+                if iso is not None:
+                     camera.set_iso(iso)
 
     return captured_files
 
@@ -793,6 +805,7 @@ async def get_camera_info(camera_path: str):
         "has_autofocus": cam_info.get('has_autofocus', False),
         "has_autofocus": cam_info.get('has_autofocus', False),
         "autofocus_enabled": camera._autofocus_enabled if camera and isinstance(camera, PiCamera) else None,
+        "iso": camera._iso if camera and isinstance(camera, PiCamera) else None,
         "manual_focus_value": camera._manual_focus_value if camera and isinstance(camera, PiCamera) else None,
         "current_lens_position": camera.get_lens_position() if camera and isinstance(camera, PiCamera) else None
     }
@@ -822,6 +835,7 @@ async def capture_image(request: CaptureRequest):
             camera_path=request.camera_path,
             resolution=request.resolution,
             shutter_speed=request.shutter_speed,
+            iso=request.iso,
             autofocus=request.autofocus,
             manual_focus=request.manual_focus,
             subfolder=request.subfolder,
@@ -869,6 +883,7 @@ class SaveCameraSettingsRequest(BaseModel):
     camera_path: str
     resolution: str | None = None
     shutter_speed: str | None = None
+    iso: int | None = None
     autofocus: bool | None = None
     prefix: str | None = None
 
@@ -885,6 +900,8 @@ async def save_camera_settings(request: SaveCameraSettingsRequest):
             cam_config['resolution'] = request.resolution
         if request.shutter_speed:
             cam_config['shutter_speed'] = request.shutter_speed
+        if request.iso is not None:
+             cam_config['iso'] = request.iso
         if request.autofocus is not None:
              cam_config['autofocus_enabled'] = request.autofocus
 
@@ -903,6 +920,7 @@ async def save_camera_settings(request: SaveCameraSettingsRequest):
              full_config['cameras'][request.camera_path].update({
                  'resolution': request.resolution,
                  'shutter_speed': request.shutter_speed,
+                 'iso': request.iso,
                  'autofocus_enabled': request.autofocus
              })
              # Filter out None values to keep config clean
@@ -1252,7 +1270,7 @@ async def api_system_stats():
         return {"error": str(e)}
 
 @app.get("/video_feed")
-async def video_feed(camera_path: str, resolution: str = "1280x720", shutter_speed: str = "Auto", 
+async def video_feed(camera_path: str, resolution: str = "1280x720", shutter_speed: str = "Auto", iso: int = 0,
                      preview_quality: int = 70, preview_width: int = 1280):
     try:
         if camera_path not in available_cameras:
@@ -1296,6 +1314,7 @@ async def video_feed(camera_path: str, resolution: str = "1280x720", shutter_spe
         if isinstance(camera, PiCamera):
             shutter_speed_us = parse_shutter_speed(shutter_speed)
             camera.set_shutter_speed(shutter_speed_us)
+            camera.set_iso(iso)
 
         return StreamingResponse(
             stream_generator(camera_path, quality=preview_quality, max_width=preview_width), 

@@ -82,7 +82,9 @@ class CameraBase:
     def set_resolution(self, width, height):
         raise NotImplementedError()
 
-
+    def set_iso(self, iso):
+        """Sets the ISO (Analogue Gain) of the camera."""
+        raise NotImplementedError()
 
     def set_shutter_speed(self, shutter_speed):
         raise NotImplementedError()
@@ -128,6 +130,10 @@ class USBCamera(CameraBase):
         # Wait for the camera thread to signal that it's ready
         if not self.ready_event.wait(timeout=10):
             print(f"[USBCamera {self.path}] WARNING: Camera did not become ready after resolution change.", file=sys.stderr)
+
+    def set_iso(self, iso):
+        # USB cameras typically handle gain auto or via specific driver properties not easily standard in OpenCV without V4L2 calls
+        pass
 
     def set_shutter_speed(self, shutter_speed):
         # Most USB cameras don't support programmatic shutter speed control via OpenCV
@@ -210,9 +216,11 @@ class PiCamera(CameraBase):
         self.height = 720
         self.max_width = max_width
         self.max_height = max_height
+        self.max_height = max_height
         self._autofocus_enabled = True
         self._manual_focus_value = 0.0
         self._shutter_speed = 0
+        self._iso = 0 # 0 = Auto
         self._has_autofocus = False
         self.is_running = False
 
@@ -255,6 +263,7 @@ class PiCamera(CameraBase):
         if self._has_autofocus:
             self.set_autofocus(self._autofocus_enabled)
         self.set_shutter_speed(self._shutter_speed)
+        self.set_iso(self._iso)
         print(f"[PiCamera {self.camera_id}] Camera started.", file=sys.stderr)
 
     def stop(self):
@@ -282,10 +291,57 @@ class PiCamera(CameraBase):
     def set_shutter_speed(self, shutter_speed):
         self._shutter_speed = shutter_speed
         if self.is_running and "AeEnable" in self.picam2.camera_controls:
-            if shutter_speed == 0:
-                self.picam2.set_controls({"AeEnable": True})
-            else:
-                self.picam2.set_controls({"AeEnable": False, "ExposureTime": shutter_speed})
+            # We need to be careful not to conflict with ISO setting which also might use AeEnable?
+            # Actually AeEnable False usually allows Manual Exposure AND Manual Gain.
+            # If we turn AeEnable False for Shutter, we must ensure ISO is also handled.
+            # If Shutter is Auto (0), we might still want Manual Gain (ISO) but usually Libcamera
+            # doesn't support Manual Gain + Auto Shutter easily without specific modes.
+            # For simplicity:
+            # Auto Shutter (0) + Auto ISO (0) -> AeEnable True
+            # Manual Shutter (>0) OR Manual ISO (>0) -> AeEnable False
+            
+            self._apply_exposure_controls()
+
+    def set_iso(self, iso):
+        """
+        Sets the ISO (AnalogueGain).
+        Value is expected to be standard ISO (100, 200, 400...).
+        Approximate mapping: ISO 100 ~ Gain 1.0.
+        0 = Auto.
+        """
+        self._iso = iso
+        if self.is_running:
+             self._apply_exposure_controls()
+
+    def _apply_exposure_controls(self):
+        """Helper to apply both shutter speed and ISO which share AeEnable state."""
+        if not self.picam2: return
+        
+        controls_to_set = {}
+        
+        # Determine if we need manual exposure
+        is_manual_shutter = self._shutter_speed > 0
+        is_manual_iso = self._iso > 0
+        
+        if not is_manual_shutter and not is_manual_iso:
+             # Fully Auto
+             controls_to_set["AeEnable"] = True
+        else:
+             # Manual Mode (partial or full)
+             controls_to_set["AeEnable"] = False
+             
+             if is_manual_shutter:
+                  controls_to_set["ExposureTime"] = self._shutter_speed
+             
+             if is_manual_iso:
+                  # Map ISO to Gain. Default base is usually ~1.0 for ISO 100.
+                  # Formula: Gain = ISO / 100.0
+                  gain = float(self._iso) / 100.0
+                  controls_to_set["AnalogueGain"] = gain
+        
+        # Only set if we have controls
+        if controls_to_set:
+             self.picam2.set_controls(controls_to_set)
 
     def set_autofocus(self, enable: bool):
         self._autofocus_enabled = enable
@@ -348,31 +404,8 @@ class PiCamera(CameraBase):
             # This avoids loading the raw array into Python memory
             self.picam2.capture_file(filepath)
 
-            try:
-                # Retrieve metadata from the most recent capture
-                metadata = self.picam2.capture_metadata()
-                exposure_time_us = metadata.get("ExposureTime", 0)
-                
-                if exposure_time_us > 0:
-                    exposure_time_sec = exposure_time_us / 1000000.0
-                    frac = Fraction(exposure_time_sec).limit_denominator(1000000)
-                    
-                    # Load existing EXIF data (or create new if empty/corrupt, though capture_file usually adds none or minimal)
-                    try:
-                        exif_dict = piexif.load(filepath)
-                    except Exception:
-                        exif_dict = {"0th": {}, "Exif": {}, "GPS": {}, "1st": {}, "thumbnail": None}
-
-                    # exposure_time_sec is float, but EXIF expects rational (num, den)
-                    # 33434 is the tag for ExposureTime
-                    exif_dict["Exif"][piexif.ExifIFD.ExposureTime] = (frac.numerator, frac.denominator)
-                    
-                    exif_bytes = piexif.dump(exif_dict)
-                    piexif.insert(exif_bytes, filepath)
-                    print(f"[PiCamera] Added Shutter Speed: {frac}s ({exposure_time_us}us) to {filepath}", file=sys.stderr)
+            # Metadata writing (ISO, Exif) removed per user request.
             
-            except Exception as e:
-                print(f"[PiCamera] Warning: Failed to write metadata: {e}", file=sys.stderr)
         finally:
             if reconfigured:
                 print(f"[PiCamera] Restoring Video Mode: {original_width}x{original_height}", file=sys.stderr)
@@ -389,7 +422,7 @@ class PiCamera(CameraBase):
                 self._apply_current_controls()
 
     def _apply_current_controls(self):
-        """Applies the current internal state (shutter speed, manual/auto focus) to the running camera."""
+        """Applies the current internal state (shutter speed, ISO, manual/auto focus) to the running camera."""
         if not self.picam2:
             return
 
@@ -404,8 +437,8 @@ class PiCamera(CameraBase):
                   except Exception as e:
                        print(f"[PiCamera] Failed to restore lens position: {e}", file=sys.stderr)
 
-        # 2. Shutter Speed
-        self.set_shutter_speed(self._shutter_speed)
+        # 2. Exposure (Shutter + ISO)
+        self._apply_exposure_controls()
 
     def capture_array(self):
         """Captures a single frame. Renamed from capture_still for clarity."""

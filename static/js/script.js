@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const captureBtn = document.getElementById('capture-image-btn');
     const resolutionSelect = document.getElementById('resolution-select');
     const shutterSpeedSelect = document.getElementById('shutter-speed-select');
+    const isoSelect = document.getElementById('iso-select');
     const autofocusCheckbox = document.getElementById('autofocus-checkbox');
     const manualFocusSlider = document.getElementById('manual-focus-slider');
     const manualFocusValue = document.getElementById('manual-focus-value');
@@ -124,9 +125,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const selectedCameraPath = cameraSelect.value;
         const resolution = resolutionSelect ? resolutionSelect.value : '640x480';
         const shutterSpeed = shutterSpeedSelect ? shutterSpeedSelect.value : 'Auto';
+        const iso = isoSelect ? isoSelect.value : '0';
 
         if (selectedCameraPath) {
-            cameraFeed.src = `/video_feed?camera_path=${selectedCameraPath}&resolution=${resolution}&shutter_speed=${shutterSpeed}`;
+            cameraFeed.src = `/video_feed?camera_path=${selectedCameraPath}&resolution=${resolution}&shutter_speed=${shutterSpeed}&iso=${iso}`;
             if (resolutionDisplay) resolutionDisplay.textContent = `Resolution: ${resolution}`;
             logMessage(`Feed active: ${availableCameras[selectedCameraPath].friendly_name}`);
 
@@ -423,6 +425,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (focusContainer) focusContainer.classList.add('opacity-50', 'pointer-events-none');
                 }
 
+                // Update ISO if saved value exists
+                if (isoSelect) {
+                    // Check if we have a saved ISO preference for this camera 
+                    // (Actually the API just returned dynamic info, but config loading is separate? 
+                    // No, get_camera_info returns "iso" which is the current internal state)
+                    if (cameraInfo.iso !== undefined && cameraInfo.iso !== null) {
+                        isoSelect.value = cameraInfo.iso;
+                    } else {
+                        isoSelect.value = "0";
+                    }
+                }
+
                 await updateShutterSpeedOptions(selectedCameraPath);
                 updateCameraFeed();
 
@@ -441,6 +455,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (resolutionSelect) resolutionSelect.addEventListener('change', updateCameraFeed);
     if (shutterSpeedSelect) shutterSpeedSelect.addEventListener('change', updateCameraFeed);
+    if (isoSelect) isoSelect.addEventListener('change', updateCameraFeed);
 
     if (autofocusCheckbox) {
         autofocusCheckbox.addEventListener('change', async () => {
@@ -506,6 +521,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const resolution = resolutionSelect ? resolutionSelect.value : null;
             const shutterSpeed = shutterSpeedSelect ? shutterSpeedSelect.value : null;
+            const iso = isoSelect ? parseInt(isoSelect.value) : null;
             const autofocus = autofocusCheckbox ? autofocusCheckbox.checked : null;
             const prefix = prefixInput ? prefixInput.value : null;
 
@@ -519,6 +535,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     camera_path: selectedCameraPath,
                     resolution: resolution,
                     shutter_speed: shutterSpeed,
+                    iso: iso,
                     autofocus: autofocus,
                     prefix: prefix
                 }),
@@ -559,14 +576,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const resolution = resolutionSelect ? resolutionSelect.value : "Unknown";
         const shutter = shutterSpeedSelect ? shutterSpeedSelect.value : "Auto";
+        const iso = isoSelect ? isoSelect.value : "0";
         const camName = cameraSelect.options[cameraSelect.selectedIndex].text;
 
         // Update Popup Content
         popupName.textContent = camName;
-        popupDetails.textContent = `Resolution: ${resolution} | Shutter: ${shutter}`;
+        popupDetails.textContent = `Resolution: ${resolution} | Shutter: ${shutter} | ISO: ${iso === '0' ? 'Auto' : iso}`;
 
         // Set Source (Force reload)
-        popupImg.src = `/video_feed?camera_path=${selectedCameraPath}&resolution=${resolution}&shutter_speed=${shutter}&t=${new Date().getTime()}`;
+        popupImg.src = `/video_feed?camera_path=${selectedCameraPath}&resolution=${resolution}&shutter_speed=${shutter}&iso=${iso}&t=${new Date().getTime()}`;
 
         // Show Modal
         modal.classList.remove('hidden');
@@ -648,6 +666,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const prefix = prefixInput ? prefixInput.value : 'IMG';
             const resolution = resolutionSelect ? resolutionSelect.value : '1280x720';
             const shutterSpeed = shutterSpeedSelect ? shutterSpeedSelect.value : 'Auto';
+            const iso = isoSelect ? parseInt(isoSelect.value) : 0;
             const autofocus = autofocusCheckbox ? autofocusCheckbox.checked : false;
             const manual_focus = manualFocusSlider ? parseFloat((manualFocusSlider.value / 100).toFixed(1)) : 0;
             const startTime = Date.now();
@@ -661,6 +680,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     prefix: prefix,
                     resolution: resolution,
                     shutter_speed: shutterSpeed,
+                    iso: iso,
                     autofocus: autofocus,
                     manual_focus: manual_focus
                 }),
