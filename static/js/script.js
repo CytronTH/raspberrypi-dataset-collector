@@ -1008,6 +1008,24 @@ document.addEventListener('DOMContentLoaded', () => {
                     logBox.appendChild(div);
                     logBox.scrollTop = logBox.scrollHeight;
                 }
+            } else if (data.type === 'interval_status') {
+                // Update Interval UI if modal is open (or globally)
+                const statusContainer = document.getElementById('interval-status-container');
+                const startBtn = document.getElementById('start-interval-btn');
+                const stopBtn = document.getElementById('stop-interval-btn');
+                const closeBtn = document.getElementById('cancel-interval-btn');
+
+                if (data.status === 'running') {
+                    if (statusContainer) statusContainer.classList.remove('hidden');
+                    if (startBtn) startBtn.classList.add('hidden');
+                    if (stopBtn) stopBtn.classList.remove('hidden');
+                    if (closeBtn) closeBtn.textContent = "Close (Background)";
+                } else {
+                    if (statusContainer) statusContainer.classList.add('hidden');
+                    if (startBtn) startBtn.classList.remove('hidden');
+                    if (stopBtn) stopBtn.classList.add('hidden');
+                    if (closeBtn) closeBtn.textContent = "Close";
+                }
             }
         };
 
@@ -1041,6 +1059,9 @@ document.addEventListener('DOMContentLoaded', () => {
             .then(config => {
                 const brokerInput = document.getElementById('mqtt-broker');
                 if (!brokerInput) return;
+
+                const enabledToggle = document.getElementById('mqtt-enabled');
+                if (enabledToggle) enabledToggle.checked = config.enabled !== false;
 
                 brokerInput.value = config.broker || '';
                 document.getElementById('mqtt-port').value = config.port || 1883;
@@ -1105,6 +1126,7 @@ document.addEventListener('DOMContentLoaded', () => {
             btn.textContent = "Saving...";
 
             const payload = {
+                enabled: document.getElementById('mqtt-enabled').checked,
                 broker: document.getElementById('mqtt-broker').value,
                 port: parseInt(document.getElementById('mqtt-port').value),
                 topic: document.getElementById('mqtt-topic').value,
@@ -1219,6 +1241,103 @@ document.addEventListener('DOMContentLoaded', () => {
                 stopFocusPolling();
             }
         });
+    }
+
+    // --- Interval Capture Logic ---
+    const intervalBtn = document.getElementById('interval-setup-btn');
+    const intervalModal = document.getElementById('interval-modal');
+    const startIntervalBtn = document.getElementById('start-interval-btn');
+    const stopIntervalBtn = document.getElementById('stop-interval-btn');
+    const cancelIntervalBtn = document.getElementById('cancel-interval-btn');
+    const intervalSecondsInput = document.getElementById('interval-seconds');
+    const intervalCountInput = document.getElementById('interval-count');
+    const intervalDurationDisplay = document.getElementById('interval-duration-display');
+
+    if (intervalBtn && intervalModal) {
+        // Calculation
+        function updateDuration() {
+            const sec = parseFloat(intervalSecondsInput.value) || 0;
+            const count = parseInt(intervalCountInput.value) || 0;
+            if (count === 0) {
+                intervalDurationDisplay.textContent = "Infinite";
+            } else {
+                const totalSec = sec * count;
+                // Format nicely
+                if (totalSec < 60) {
+                    intervalDurationDisplay.textContent = `${totalSec.toFixed(1)}s`;
+                } else {
+                    const min = Math.floor(totalSec / 60);
+                    const rem = (totalSec % 60).toFixed(0);
+                    intervalDurationDisplay.textContent = `${min}m ${rem}s`;
+                }
+            }
+        }
+
+        if (intervalSecondsInput) intervalSecondsInput.addEventListener('input', updateDuration);
+        if (intervalCountInput) intervalCountInput.addEventListener('input', updateDuration);
+
+        // Open Modal
+        intervalBtn.addEventListener('click', () => {
+            // Check if already running? Backend usually rejects, but UI state should reflect via WS.
+            intervalModal.classList.remove('hidden');
+            updateDuration();
+        });
+
+        // Close Modal
+        if (cancelIntervalBtn) {
+            cancelIntervalBtn.addEventListener('click', () => {
+                intervalModal.classList.add('hidden');
+            });
+        }
+
+        // Start
+        if (startIntervalBtn) {
+            startIntervalBtn.addEventListener('click', async () => {
+                const sec = parseFloat(intervalSecondsInput.value);
+                const count = parseInt(intervalCountInput.value);
+
+                // Get current camera context
+                // The backend handles the context based on what we set in `set_active_camera`
+                const subfolder = document.getElementById('subfolder-input')?.value || "default";
+                const prefix = document.getElementById('prefix-input')?.value || "IMG";
+
+                try {
+                    const response = await fetch('/api/start_interval', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            interval_seconds: sec,
+                            total_count: count,
+                            subfolder: subfolder,
+                            prefix: prefix
+                        })
+                    });
+                    const data = await response.json();
+                    if (data.status === 'success') {
+                        logMessage(`Interval Started: ${data.message}`);
+                        // UI update handled by WebSocket
+                    } else {
+                        logMessage(`Error: ${data.message}`, true);
+                        alert(data.message);
+                    }
+                } catch (e) {
+                    console.error(e);
+                    logMessage("Failed to start interval", true);
+                }
+            });
+        }
+
+        // Stop
+        if (stopIntervalBtn) {
+            stopIntervalBtn.addEventListener('click', async () => {
+                try {
+                    await fetch('/api/stop_interval', { method: 'POST' });
+                    // UI update handled by WebSocket
+                } catch (e) {
+                    console.error(e);
+                }
+            });
+        }
     }
 
 });

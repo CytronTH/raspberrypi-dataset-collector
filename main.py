@@ -14,6 +14,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 import uvicorn
 import piexif # Import piexif
+from PIL import Image, ImageDraw, ImageFont # Import PIL for overlay
 import sys  # Import sys
 import socket # Import socket
 from typing import Optional
@@ -113,16 +114,11 @@ async def mqtt_callback(data):
                 mqtt_client.publish(f"dataset_collector/{hostname}/capture/finished", json.dumps(confirmation_payload))
 
     except Exception as e:
-        print(f"Error executing MQTT capture: {e}", file=sys.stderr)
-        # Optional: Send error status
-        if mqtt_client:
-             error_payload = {
-                "status": "error",
-                "error": str(e),
-                "timestamp": time.time()
-            }
-             hostname = socket.gethostname()
-             mqtt_client.publish(f"dataset_collector/{hostname}/capture/finished", json.dumps(error_payload))
+        print(f"Error handling MQTT message: {e}", file=sys.stderr)
+
+
+
+
 
 
 @asynccontextmanager
@@ -150,6 +146,7 @@ async def lifespan(app: FastAPI):
     global mqtt_client
     try:
         mqtt_config = load_mqtt_config()
+        mqtt_enabled = mqtt_config.get('enabled', True)
         broker = mqtt_config.get('broker', 'localhost')
         port = mqtt_config.get('port', 1883)
         topic = mqtt_config.get('topic', 'capture/trigger')
@@ -157,6 +154,7 @@ async def lifespan(app: FastAPI):
         password = mqtt_config.get('password')
     except Exception as e:
         print(f"Error loading MQTT config: {e}", file=sys.stderr)
+        mqtt_enabled = True
         broker = 'localhost'
         port = 1883
         topic = 'capture/trigger'
@@ -171,8 +169,13 @@ async def lifespan(app: FastAPI):
 
     loop = asyncio.get_running_loop()
     hostname = socket.gethostname()
-    mqtt_client = MQTTClientWrapper(broker, port, topic, mqtt_callback, loop, username, password, mqtt_log_callback, hostname)
-    mqtt_client.start()
+    
+    if mqtt_enabled:
+        mqtt_client = MQTTClientWrapper(broker, port, topic, mqtt_callback, loop, username, password, mqtt_log_callback, hostname)
+        mqtt_client.start()
+    else:
+        print("MQTT is disabled in config. Skipping startup.", file=sys.stderr)
+        mqtt_client = None
     
     yield
     
@@ -196,6 +199,8 @@ active_cameras = {}
 capture_count = 0
 pending_transfers = []
 mqtt_client = None
+interval_capture_running = False
+interval_task = None
 
 # --- WebSocket Manager ---
 class ConnectionManager:
@@ -258,6 +263,12 @@ class CaptureAllRequest(BaseModel):
     iso: int | None = None
     autofocus: bool | None = None
     captures: list[PerCameraCaptureSettings] | None = None
+
+class StartIntervalRequest(BaseModel):
+    interval_seconds: float
+    total_count: int = 0 # 0 = infinite
+    subfolder: str | None = "interval"
+    prefix: str | None = "INT"
 
 class SFTPConfig(BaseModel):
     enabled: bool
@@ -483,6 +494,64 @@ async def perform_global_capture(request: CaptureAllRequest, source: str = "Unkn
                           except Exception as e:
                               print(f"Failed to add EXIF: {e}", file=sys.stderr)
 
+                # --- OVERLAY SETTINGS LOGIC ---
+                try:
+                    # Reload config to ensure we have latest overlay setting
+                    current_conf = load_config()
+                    if current_conf.get('overlay_settings', False):
+                        print(f"[{source}] Applying overlay to {save_path}...", file=sys.stderr)
+                        
+                        # Open Image
+                        with Image.open(str(save_path)) as img:
+                            draw = ImageDraw.Draw(img)
+                            
+                            # Prepare Text
+                            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            res_text = f"{width}x{height}"
+                            cam_name = camera.friendly_name
+                            
+                            # Try to get exposure info if available (PiCamera)
+                            exposure_info = ""
+                            if isinstance(camera, PiCamera):
+                                meta = camera.picam2.capture_metadata() if camera.picam2 else {}
+                                exp_time = meta.get('ExposureTime', 0) / 1000000.0 # seconds
+                                iso_val = meta.get('AnalogueGain', 0) * 100 # Approx ISO
+                                if exp_time > 0:
+                                    if exp_time < 1:
+                                        exposure_info = f" | 1/{int(1/exp_time)}s"
+                                    else:
+                                        exposure_info = f" | {exp_time:.1f}s"
+                                if iso_val > 0:
+                                    exposure_info += f" | ISO {int(iso_val)}"
+
+                            overlay_text = f" {timestamp} | {cam_name} | {res_text}{exposure_info} "
+                            
+                            # Draw Text - Basic logic, Top Left, White with Black Outline
+                            try:
+                                font = ImageFont.load_default() 
+                            except:
+                                font = None
+                            
+                            text_pos = (20, 20)
+                            try:
+                                # bbox = draw.textbbox(text_pos, overlay_text, font=font) # specific to newer PIL
+                                # fallback for older PIL if needed:
+                                text_width, text_height = draw.textsize(overlay_text, font=font)
+                                bbox = (text_pos[0], text_pos[1], text_pos[0]+text_width, text_pos[1]+text_height)
+                            except AttributeError:
+                                # New PIL
+                                bbox = draw.textbbox(text_pos, overlay_text, font=font)
+
+                            draw.rectangle((bbox[0]-5, bbox[1]-5, bbox[2]+5, bbox[3]+5), fill="black")
+                            draw.text(text_pos, overlay_text, font=font, fill="white")
+                            
+                            # Save back
+                            img.save(str(save_path))
+                            print(f"[{source}] Overlay applied.", file=sys.stderr)
+
+                except Exception as e:
+                    print(f"[{source}] Failed to apply overlay: {e}", file=sys.stderr)
+
                 # Broadcast
                 relative_filename = str(save_path.relative_to(CAPTURE_DIR_BASE))
                 await manager.broadcast({
@@ -707,7 +776,7 @@ async def get_config():
 
 class SaveConfigRequest(BaseModel):
     config: str
-    selected_cameras: dict = {}
+    selected_cameras: dict | None = None
 
 class PerformanceModeRequest(BaseModel):
     mode: str
@@ -762,7 +831,7 @@ async def save_config_endpoint(request: SaveConfigRequest):
 
 
         # 2. Merge selected cameras
-        if request.selected_cameras:
+        if request.selected_cameras is not None:
             config_data = generate_default_config(config_data, request.selected_cameras)
         
         # Always save the config to ensure user edits are persisted
@@ -980,6 +1049,94 @@ async def get_sftp_config_endpoint():
         print(f"Error loading SFTP config: {e}", file=sys.stderr)
         raise HTTPException(status_code=500, detail="Error loading config")
 
+# --- Interval Capture Logic ---
+async def interval_capture_loop(request: CaptureAllRequest, interval: float, count: int = 0):
+    global interval_capture_running
+    print(f"Starting interval capture: Interval={interval}s, Count={count}", file=sys.stderr)
+    
+    current_count = 0
+    try:
+        while interval_capture_running:
+            if count > 0 and current_count >= count:
+                print("Interval capture reached target count.", file=sys.stderr)
+                break
+                
+            start_time = time.time()
+            
+            # Execute Capture
+            print(f"Interval Capture {current_count + 1}/{count if count > 0 else 'Inf'}", file=sys.stderr)
+            await perform_global_capture(request, source="Interval")
+            current_count += 1
+            
+            # Calculate sleep to maintain accurate interval
+            elapsed = time.time() - start_time
+            sleep_time = max(0.0, interval - elapsed)
+            
+            if not interval_capture_running:
+                break
+                
+            await asyncio.sleep(sleep_time)
+            
+    except Exception as e:
+        print(f"Error in interval capture loop: {e}", file=sys.stderr)
+    finally:
+        interval_capture_running = False
+        print("Interval capture loop stopped.", file=sys.stderr)
+        await manager.broadcast({"type": "interval_status", "status": "stopped"})
+
+@app.post("/api/start_interval")
+async def start_interval(request: StartIntervalRequest):
+    global interval_capture_running, interval_task
+    
+    if interval_capture_running:
+        return JSONResponse({"status": "error", "message": "Interval capture already running"}, status_code=400)
+    
+    interval_capture_running = True
+    
+    # Context-Aware Logic
+    captures_list = []
+    mode_msg = "Global"
+    
+    # Check if we are in a specific camera context
+    if active_camera_context and active_camera_context in active_cameras:
+         mode_msg = f"Single ({active_camera_context})"
+         captures_list.append(PerCameraCaptureSettings(
+             camera_path=active_camera_context,
+             subfolder=request.subfolder,
+             prefix=request.prefix
+         ))
+
+    # Create capture request
+    capture_req = CaptureAllRequest(
+        subfolder=request.subfolder,
+        prefix=request.prefix,
+        captures=captures_list if captures_list else None # None = All Cameras
+    )
+
+    print(f"Starting interval capture [{mode_msg}]: Interval={request.interval_seconds}s, Count={request.total_count}", file=sys.stderr)
+    
+    # Start the background task
+    interval_task = asyncio.create_task(
+        interval_capture_loop(capture_req, request.interval_seconds, request.total_count)
+    )
+    
+    await manager.broadcast({"type": "interval_status", "status": "running", "params": request.dict()})
+    return {"status": "success", "message": "Interval capture started"}
+
+@app.post("/api/stop_interval")
+async def stop_interval():
+    global interval_capture_running
+    if not interval_capture_running:
+         return {"status": "ignored", "message": "Not running"}
+         
+    interval_capture_running = False
+    # The loop will check this flag and exit
+    return {"status": "success", "message": "Stopping interval capture..."}
+
+@app.get("/api/interval_status")
+async def get_interval_status():
+    return {"status": "running" if interval_capture_running else "stopped"}
+
 @app.post("/api/sftp_config")
 async def save_sftp_config_endpoint(config: SFTPConfig):
     from sftp_handler import SFTP_CONFIG_PATH
@@ -1096,20 +1253,30 @@ async def list_captured_files():
 
 
 class MQTTUpdateRequest(BaseModel):
+    enabled: bool = True
     broker: str
-    port: int
+    port: int | None = 1883
     topic: str
     username: str | None = None
     password: str | None = None
 
 @app.get("/api/mqtt_config")
 async def get_mqtt_config_api():
-    return load_mqtt_config()
+    config = load_mqtt_config()
+    # Ensure enabled key exists for frontend
+    if 'enabled' not in config:
+        config['enabled'] = True
+    return config
 
 @app.post("/api/mqtt_config")
 async def save_mqtt_config_api(request: MQTTUpdateRequest):
     try:
         config = request.model_dump()
+        # Ensure port is set to default if None (Pydantic default might not apply if explicitly None is passed? 
+        # Actually Pydantic v2 handles it, but let's be safe for v1/v2 compat)
+        if config.get('port') is None:
+             config['port'] = 1883
+             
         save_mqtt_config(config)
         
         # Restart MQTT Client with new settings (Hot Reload)
@@ -1120,17 +1287,22 @@ async def save_mqtt_config_api(request: MQTTUpdateRequest):
         
         # Reload config to get fresh values (and handle defaults)
         mqtt_config = load_mqtt_config()
-        broker = mqtt_config.get('broker', 'localhost')
-        port = mqtt_config.get('port', 1883)
-        topic = mqtt_config.get('topic', 'capture/trigger')
-        username = mqtt_config.get('username')
-        password = mqtt_config.get('password')
-
-        loop = asyncio.get_running_loop()
-        mqtt_client = MQTTClientWrapper(broker, port, topic, mqtt_callback, loop, username, password, mqtt_log_callback)
-        mqtt_client.start()
-        print(f"MQTT Client restarted with new config: {broker}:{port}", file=sys.stderr)
+        enabled = mqtt_config.get('enabled', True)
         
+        if enabled:
+            broker = mqtt_config.get('broker', 'localhost')
+            port = mqtt_config.get('port', 1883)
+            topic = mqtt_config.get('topic', 'capture/trigger')
+            username = mqtt_config.get('username')
+            password = mqtt_config.get('password')
+
+            loop = asyncio.get_running_loop()
+            mqtt_client = MQTTClientWrapper(broker, port, topic, mqtt_callback, loop, username, password, mqtt_log_callback)
+            mqtt_client.start()
+            print(f"MQTT Client restarted with new config: {broker}:{port}", file=sys.stderr)
+        else:
+            print("MQTT disabled. Client stopped.", file=sys.stderr)
+            mqtt_client = None
         return JSONResponse({"status": "success", "message": "Configuration saved and connection restarted."})
         
     except Exception as e:

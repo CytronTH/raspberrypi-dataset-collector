@@ -115,6 +115,16 @@
                         Take Photo
                     </button>
 
+                    <!-- Interval Capture Button -->
+                    <button id="interval-setup-btn"
+                        class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl transition duration-200 shadow-md flex items-center justify-center transform hover:scale-[1.02]">
+                        <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
+                        Interval Capture
+                    </button>
+
                     <!-- Status Indicator -->
                     <div id="recording-status"
                         class="hidden text-center py-2 text-sm rounded-lg bg-gray-700 text-gray-400">
@@ -353,6 +363,54 @@
     </div>
 
     <!-- New Folder Dialog (Nested or separate, let's keep it simple with prompt for now) -->
+
+    <!-- Interval Capture Modal -->
+    <div id="interval-modal" class="fixed inset-0 bg-black bg-opacity-80 z-50 hidden flex items-center justify-center">
+        <div class="bg-gray-900 rounded-xl shadow-2xl p-6 w-full max-w-md border border-gray-700">
+            <h2 class="text-xl font-bold text-white mb-4 flex items-center">
+                <svg class="w-6 h-6 mr-2 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                Interval Capture Setup
+            </h2>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-1">Interval (seconds)</label>
+                    <input type="number" id="interval-seconds" value="5" min="1" step="0.5"
+                        class="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white focus:outline-none focus:border-purple-500">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-1">Total Count (0 = Infinite)</label>
+                    <input type="number" id="interval-count" value="0" min="0" step="1"
+                        class="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white focus:outline-none focus:border-purple-500">
+                </div>
+
+                <!-- Duration Summary -->
+                <div class="p-3 bg-gray-800/50 rounded border border-gray-700 text-sm">
+                    <span class="text-gray-400">Estimated Duration:</span>
+                    <span id="interval-duration-display" class="text-white font-mono font-bold ml-2">Infinite</span>
+                </div>
+
+                <div id="interval-status-container" class="hidden p-3 bg-gray-800 rounded border border-gray-600 mt-2">
+                    <p class="text-green-400 text-sm font-mono flex items-center">
+                        <span class="animate-pulse mr-2">●</span> Running...
+                    </p>
+                </div>
+            </div>
+
+            <div class="mt-6 flex justify-end space-x-3">
+                <button id="cancel-interval-btn"
+                    class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition">Close</button>
+                <button id="stop-interval-btn"
+                    class="hidden px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition">Stop</button>
+                <button id="start-interval-btn"
+                    class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded font-bold transition shadow-lg">Start</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Video Popup Modal -->
     <div id="video-popup-modal"

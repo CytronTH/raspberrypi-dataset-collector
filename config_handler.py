@@ -39,7 +39,7 @@ def detect_system_performance():
 def load_config():
     """Loads the camera configuration from the YAML file."""
     if not os.path.exists(CONFIG_PATH):
-        default_config = {"cameras": {}, "performance_mode": "auto"}
+        default_config = {"cameras": {}, "performance_mode": "auto", "overlay_settings": False}
     else:
         try:
             with open(CONFIG_PATH, 'r') as f:

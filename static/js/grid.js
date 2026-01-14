@@ -615,6 +615,130 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
+    // --- Interval Capture Logic ---
+    const intervalSetupBtn = document.getElementById('interval-setup-btn');
+    const intervalModal = document.getElementById('interval-modal');
+    const cancelIntervalBtn = document.getElementById('cancel-interval-btn');
+    const startIntervalBtn = document.getElementById('start-interval-btn');
+    const stopIntervalBtn = document.getElementById('stop-interval-btn');
+    const intervalStatusContainer = document.getElementById('interval-status-container');
+    const intervalDurationDisplay = document.getElementById('interval-duration-display');
+    const intervalSecondsInput = document.getElementById('interval-seconds');
+    const intervalCountInput = document.getElementById('interval-count');
+
+    function updateDurationPreview() {
+        const sec = parseFloat(intervalSecondsInput.value) || 0;
+        const count = parseInt(intervalCountInput.value) || 0;
+
+        if (count === 0) {
+            intervalDurationDisplay.textContent = "Infinite";
+        } else {
+            const totalSeconds = sec * count;
+            // Format time
+            if (totalSeconds < 60) {
+                intervalDurationDisplay.textContent = `${totalSeconds.toFixed(1)}s`;
+            } else if (totalSeconds < 3600) {
+                const m = Math.floor(totalSeconds / 60);
+                const s = (totalSeconds % 60).toFixed(0);
+                intervalDurationDisplay.textContent = `${m}m ${s}s`;
+            } else {
+                const h = Math.floor(totalSeconds / 3600);
+                const m = Math.floor((totalSeconds % 3600) / 60);
+                intervalDurationDisplay.textContent = `${h}h ${m}m`;
+            }
+        }
+    }
+
+    if (intervalSecondsInput) intervalSecondsInput.addEventListener('input', updateDurationPreview);
+    if (intervalCountInput) intervalCountInput.addEventListener('input', updateDurationPreview);
+
+    // Modal Control
+    if (intervalSetupBtn && intervalModal) {
+        intervalSetupBtn.onclick = () => {
+            // Check status on open
+            checkIntervalStatus();
+            updateDurationPreview(); // Calculate immediately on open
+            intervalModal.classList.remove('hidden');
+        };
+    }
+
+    if (cancelIntervalBtn && intervalModal) {
+        cancelIntervalBtn.onclick = () => {
+            intervalModal.classList.add('hidden');
+        };
+    }
+
+    // Check Status
+    async function checkIntervalStatus() {
+        try {
+            const res = await fetch('/api/interval_status');
+            const data = await res.json();
+            updateIntervalUI(data.status === 'running');
+        } catch (e) { console.error("Interval status check failed", e); }
+    }
+
+    function updateIntervalUI(isRunning) {
+        if (isRunning) {
+            startIntervalBtn.classList.add('hidden');
+            stopIntervalBtn.classList.remove('hidden');
+            intervalStatusContainer.classList.remove('hidden');
+            // Disable inputs?
+        } else {
+            startIntervalBtn.classList.remove('hidden');
+            stopIntervalBtn.classList.add('hidden');
+            intervalStatusContainer.classList.add('hidden');
+        }
+    }
+
+    // Start Interval
+    if (startIntervalBtn) {
+        startIntervalBtn.onclick = async () => {
+            const intervalSec = parseFloat(document.getElementById('interval-seconds').value);
+            const count = parseInt(document.getElementById('interval-count').value);
+
+            // Re-use prefix from main UI or distinct? Using main UI prefix for simplicity or default
+            const prefix = prefixInput ? prefixInput.value : "INT";
+
+            try {
+                const res = await fetch('/api/start_interval', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        interval_seconds: intervalSec,
+                        total_count: count,
+                        prefix: prefix,
+                        subfolder: "interval" // Default subfolder
+                    })
+                });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    updateIntervalUI(true);
+                    logMessage(`[Interval] Started: ${intervalSec}s loop`);
+                } else {
+                    alert(data.message);
+                }
+            } catch (e) {
+                alert("Failed to start interval: " + e.message);
+            }
+        };
+    }
+
+    // Stop Interval
+    if (stopIntervalBtn) {
+        stopIntervalBtn.onclick = async () => {
+            try {
+                const res = await fetch('/api/stop_interval', { method: 'POST' });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    updateIntervalUI(false);
+                    logMessage(`[Interval] Stopped.`);
+                }
+            } catch (e) {
+                alert("Failed to stop interval: " + e.message);
+            }
+        };
+    }
+
     // --- MQTT & WebSocket Logic ---
 
     // updateMqttStatus handled by monitor.js
@@ -638,6 +762,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const source = data.source || "WS";
                 // Log all new files, including WebUI, to show individual file progress
                 logMessage(`[${source}] Saved: ${data.filename}`);
+            } else if (data.type === 'interval_status') {
+                // Update UI if user has modal open or just strictly
+                // Only update if elements exist
+                if (typeof updateIntervalUI === 'function') {
+                    updateIntervalUI(data.status === 'running');
+                }
+                logMessage(`[Interval] Status: ${data.status}`);
             } else if (data.type === 'file_deleted') {
                 logMessage(`[System] Auto-Deleted: ${data.filename}`);
             }

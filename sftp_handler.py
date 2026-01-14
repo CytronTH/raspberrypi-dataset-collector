@@ -29,6 +29,10 @@ class SFTPHandler:
             print("SFTP configuration missing. Skipping upload.", file=sys.stderr)
             return False
 
+        if not self.config.get('enabled', False):
+            print("SFTP Auto-Transfer is disabled. Skipping upload.", file=sys.stderr)
+            return False
+
         host = self.config.get('host')
         port = self.config.get('port', 22)
         username = self.config.get('username')

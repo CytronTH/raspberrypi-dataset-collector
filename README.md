@@ -10,8 +10,11 @@ A web-based interface for capturing and managing datasets using Raspberry Pi cam
 -   **Multi-Camera Support**: Automatically detects and controls Raspberry Pi cameras and USB webcams.
 -   **Live Preview**: Low-latency MJPEG video feeds from all connected cameras.
 -   **Web Interface**:
-    -   **Dashboard (Grid View)**: Monitor all cameras simultaneously with live stats.
-    -   **Single Camera View**: Fine-grained control with manual focus, shutter speed, and resolution settings.
+    -   **Dashboard (Grid View)**: Monitor all cameras simultaneously with live stats and **Inspection History**.
+    -   **Single Camera View**: Fine-grained control with manual focus, shutter speed, resolution settings, and **Interval Capture**.
+    -   **Calibration Tools**: 
+        -   **Alignment**: 4-dot overlay for precise physical camera positioning.
+        -   **Coordinate Helper**: Interactive tool to define crop regions by drawing on captured images.
     -   **SFTP Configuration**: Dedicated page to configure auto-transfer settings.
     -   **Config Editor**: Edit camera configurations (YAML) and MQTT settings directly from the browser.
     -   **Activity Log**: Real-time logging of capture events and system status.

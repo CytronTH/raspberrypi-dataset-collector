@@ -5,3 +5,5 @@ piexif
 paho-mqtt>=2.0.0
 pydantic
 psutil
+Pillow
+opencv-python-headless
