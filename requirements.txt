@@ -7,3 +7,4 @@ pydantic
 psutil
 Pillow
 opencv-python-headless
+numpy<2
