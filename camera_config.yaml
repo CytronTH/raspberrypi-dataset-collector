@@ -20,7 +20,7 @@ cameras:
     friendly_name: PiCamera 1 (imx708_wide)
     has_autofocus: true
     iso: 800
-    manual_focus_value: 0.5
+    manual_focus_value: 1.0
     max_height: 2592
     max_width: 4608
     mqtt_enabled: true
