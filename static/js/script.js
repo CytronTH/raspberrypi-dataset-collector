@@ -28,6 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const prefixInput = document.getElementById('prefix-input');
     const delayTimerCheckbox = document.getElementById('delay-timer-checkbox');
     const delayTimerInput = document.getElementById('delay-timer-input');
+    const mqttTriggerCheckbox = document.getElementById('mqtt-trigger-checkbox');
 
     let availableCameras = {};
     let isRecording = false;
@@ -437,6 +438,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
 
+                if (mqttTriggerCheckbox) {
+                    mqttTriggerCheckbox.checked = cameraInfo.mqtt_enabled !== false; // Default to true if undefined
+                }
+
                 await updateShutterSpeedOptions(selectedCameraPath);
                 updateCameraFeed();
 
@@ -524,6 +529,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const iso = isoSelect ? parseInt(isoSelect.value) : null;
             const autofocus = autofocusCheckbox ? autofocusCheckbox.checked : null;
             const prefix = prefixInput ? prefixInput.value : null;
+            const mqttEnabled = mqttTriggerCheckbox ? mqttTriggerCheckbox.checked : null;
 
             saveSettingsBtn.disabled = true;
             saveSettingsBtn.textContent = "Saving...";
@@ -537,7 +543,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     shutter_speed: shutterSpeed,
                     iso: iso,
                     autofocus: autofocus,
-                    prefix: prefix
+                    prefix: prefix,
+                    mqtt_enabled: mqttEnabled
                 }),
             })
                 .then(response => response.json())

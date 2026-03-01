@@ -370,6 +370,24 @@ document.addEventListener('DOMContentLoaded', async () => {
                         </div>
                     </div>
                     
+                    <!-- MQTT Trigger Switch -->
+                    <div class="p-4 bg-gray-700/50 rounded-lg border border-gray-600">
+                        <div class="flex items-center justify-between">
+                            <label for="mqtt-trigger-${safeId}" class="text-sm font-medium text-gray-400 flex items-center">
+                                <svg class="w-5 h-5 mr-2 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path>
+                                </svg>
+                                Enable MQTT Trigger
+                            </label>
+
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="mqtt-trigger-${safeId}" class="sr-only peer" checked>
+                                <div class="w-11 h-6 bg-gray-600 rounded-full peer peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-800 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
+                        <p class="text-[10px] text-gray-500 mt-2">If disabled, ignored by MQTT captures.</p>
+                    </div>
+
                     <!-- Message Box -->
                     <div id="message-box-${safeId}" class="hidden bg-green-900/50 border-l-4 border-green-500 text-green-100 p-3 rounded-lg text-sm transition-all duration-300">
                         Configuration Updated!
@@ -390,6 +408,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const shutterSelect = document.getElementById(`shutter-speed-${safeId}`);
         const autofocusCheckbox = document.getElementById(`autofocus-${safeId}`);
         const manualFocusSlider = document.getElementById(`focus-adjustment-${safeId}`);
+        const mqttTriggerCheckbox = document.getElementById(`mqtt-trigger-${safeId}`);
         const feedImg = document.getElementById(`feed-${safeId}`);
 
         // 1. Populate Resolutions
@@ -448,6 +467,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 // Initial state update
                 updateFocusUI(safeId, true);
             }
+
+            // Sync MQTT Trigger State
+            if (mqttTriggerCheckbox) {
+                mqttTriggerCheckbox.checked = info.mqtt_enabled !== false;
+            }
+
         } catch (e) { console.error(e); }
 
         // --- Event Listeners ---
@@ -495,6 +520,26 @@ document.addEventListener('DOMContentLoaded', async () => {
                 showMessage(safeId, "Focus updated");
             } catch (e) { logMessage(`Error setting focus: ${e.message}`, true); }
         });
+
+        // MQTT Trigger Toggle (Auto-saves to backend)
+        if (mqttTriggerCheckbox) {
+            mqttTriggerCheckbox.addEventListener('change', async () => {
+                const isMqttEnabled = mqttTriggerCheckbox.checked;
+                try {
+                    await fetch('/api/save_camera_settings', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            camera_path: camPath,
+                            mqtt_enabled: isMqttEnabled
+                        })
+                    });
+                    showMessage(safeId, `MQTT Trigger ${isMqttEnabled ? 'Enabled' : 'Disabled'}`);
+                } catch (e) {
+                    logMessage(`Error saving MQTT setting: ${e.message}`, true);
+                }
+            });
+        }
 
         // Initial Preview Update
         updatePreview(camPath, safeId);

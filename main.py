@@ -97,6 +97,50 @@ async def mqtt_callback(data):
         request = CaptureAllRequest(**data)
 
     print(f"Triggering capture via MQTT with data: {original_data} -> Context: {active_camera_context}", file=sys.stderr)
+    
+    # Filter request.captures based on mqtt_enabled
+    filtered_captures = []
+    if request.captures:
+        for cap in request.captures:
+            cam_path = cap.camera_path
+            cam_config = available_cameras.get(cam_path, {})
+            # If mqtt_enabled is explicitly False, skip it
+            if cam_config.get('mqtt_enabled', True):
+                filtered_captures.append(cap)
+            else:
+                print(f"[{'MQTT'}] Skipping {cam_path} because mqtt_enabled is False in config.", file=sys.stderr)
+        
+        request.captures = filtered_captures
+    else:
+        # Build captures manually for all enabled cameras if request didn't list them explicitly
+        print(f"[{'MQTT'}] Evaluating cameras from available_cameras...", file=sys.stderr)
+        for cam_path, cam_config in available_cameras.items():
+            is_enabled = cam_config.get('mqtt_enabled', True)
+            print(f"[{'MQTT'}] Checking {cam_path}: cfg={cam_config}, enabled={is_enabled}", file=sys.stderr)
+            if is_enabled:
+                 # Get default settings from config if available or use request override
+                 res = request.resolution or cam_config.get('resolution')
+                 shutter = request.shutter_speed or cam_config.get('shutter_speed')
+                 iso = request.iso or cam_config.get('iso')
+                 af = request.autofocus if request.autofocus is not None else cam_config.get('autofocus_enabled')
+                 
+                 filtered_captures.append(
+                     PerCameraCaptureSettings(
+                         camera_path=cam_path, 
+                         resolution=res, 
+                         shutter_speed=shutter,
+                         iso=iso,
+                         autofocus=af
+                     )
+                 )
+            else:
+                print(f"[{'MQTT'}] Skipping {cam_path} because mqtt_enabled is False in config.", file=sys.stderr)
+        request.captures = filtered_captures
+
+    if not request.captures:
+        print(f"[{'MQTT'}] No enabled cameras to capture after filtering. Aborting MQTT trigger.", file=sys.stderr)
+        return
+
     try:
         captured_files = await perform_global_capture(request, source="MQTT")
         
@@ -872,11 +916,11 @@ async def get_camera_info(camera_path: str):
         "friendly_name": cam_info.get('friendly_name'),
         "type": cam_info.get('type'),
         "has_autofocus": cam_info.get('has_autofocus', False),
-        "has_autofocus": cam_info.get('has_autofocus', False),
         "autofocus_enabled": camera._autofocus_enabled if camera and isinstance(camera, PiCamera) else None,
         "iso": camera._iso if camera and isinstance(camera, PiCamera) else None,
         "manual_focus_value": camera._manual_focus_value if camera and isinstance(camera, PiCamera) else None,
-        "current_lens_position": camera.get_lens_position() if camera and isinstance(camera, PiCamera) else None
+        "current_lens_position": camera.get_lens_position() if camera and isinstance(camera, PiCamera) else None,
+        "mqtt_enabled": cam_info.get('mqtt_enabled', True)
     }
 
 @app.get("/api/cameras")
@@ -955,6 +999,7 @@ class SaveCameraSettingsRequest(BaseModel):
     iso: int | None = None
     autofocus: bool | None = None
     prefix: str | None = None
+    mqtt_enabled: bool | None = None
 
 @app.post("/api/save_camera_settings")
 async def save_camera_settings(request: SaveCameraSettingsRequest):
@@ -973,6 +1018,8 @@ async def save_camera_settings(request: SaveCameraSettingsRequest):
              cam_config['iso'] = request.iso
         if request.autofocus is not None:
              cam_config['autofocus_enabled'] = request.autofocus
+        if request.mqtt_enabled is not None:
+             cam_config['mqtt_enabled'] = request.mqtt_enabled
 
         # Load full config from file to persist it properly
         full_config = load_config()
@@ -990,7 +1037,8 @@ async def save_camera_settings(request: SaveCameraSettingsRequest):
                  'resolution': request.resolution,
                  'shutter_speed': request.shutter_speed,
                  'iso': request.iso,
-                 'autofocus_enabled': request.autofocus
+                 'autofocus_enabled': request.autofocus,
+                 'mqtt_enabled': request.mqtt_enabled
              })
              # Filter out None values to keep config clean
              full_config['cameras'][request.camera_path] = {k: v for k, v in full_config['cameras'][request.camera_path].items() if v is not None}
@@ -1001,7 +1049,7 @@ async def save_camera_settings(request: SaveCameraSettingsRequest):
         available_cameras = full_config.get('cameras', {})
         # Note: We don't have a global var for defaults currently, we'll load it on demand or add it to a global config obj
         
-        print(f"Saved settings for {request.camera_path}: Res={request.resolution}, AF={request.autofocus}, Prefix={request.prefix}", file=sys.stderr)
+        print(f"Saved settings for {request.camera_path}: Res={request.resolution}, AF={request.autofocus}, Prefix={request.prefix}, MQTT={request.mqtt_enabled}", file=sys.stderr)
         return JSONResponse({"status": "success", "message": "Settings saved."})
     except Exception as e:
          print(f"Error saving camera settings: {e}", file=sys.stderr)

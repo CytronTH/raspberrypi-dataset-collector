@@ -1,0 +1,225 @@
+INFO:     Will watch for changes in these directories: ['/home/pi/dataset_collector']
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [17036] using WatchFiles
+INFO:     Started server process [17051]
+INFO:     Waiting for application startup.
+--- DETECTING CAMERAS ---
+Scanning for Pi Cameras...
+[0:40:40.440795496] [17051] [1;32m INFO [1;37mCamera [1;34mcamera_manager.cpp:330 [0mlibcamera v0.5.2+99-bfd68f78
+[0:40:40.447995397] [17073] [1;32m INFO [1;37mRPI [1;34mpisp.cpp:720 [0mlibpisp version v1.2.1 981977ff21f3 29-04-2025 (14:13:50)
+[0:40:40.450458247] [17073] [1;32m INFO [1;37mIPAProxy [1;34mipa_proxy.cpp:180 [0mUsing tuning file /usr/share/libcamera/ipa/rpi/pisp/imx477.json
+[0:40:40.457588815] [17073] [1;32m INFO [1;37mCamera [1;34mcamera_manager.cpp:220 [0mAdding camera '/base/axi/pcie@1000120000/rp1/i2c@80000/imx477@1a' for pipeline handler rpi/pisp
+[0:40:40.457627297] [17073] [1;32m INFO [1;37mRPI [1;34mpisp.cpp:1179 [0mRegistered camera /base/axi/pcie@1000120000/rp1/i2c@80000/imx477@1a to CFE device /dev/media0 and ISP device /dev/media2 using PiSP variant BCM2712_C0
+[0:40:40.460723133] [17051] [1;32m INFO [1;37mCamera [1;34mcamera.cpp:1215 [0mconfiguring streams: (0) 640x480-XBGR8888/sRGB (1) 1332x990-BGGR_PISP_COMP1/RAW
+[0:40:40.460847652] [17073] [1;32m INFO [1;37mRPI [1;34mpisp.cpp:1483 [0mSensor: /base/axi/pcie@1000120000/rp1/i2c@80000/imx477@1a - Selected sensor format: 1332x990-SBGGR10_1X10/RAW - Selected CFE format: 1332x990-PC1B/RAW
+[0:40:40.464707271] [17051] [1;32m INFO [1;37mCamera [1;34mcamera.cpp:1215 [0mconfiguring streams: (0) 640x480-XBGR8888/sRGB (1) 2028x1080-BGGR_PISP_COMP1/RAW
+[0:40:40.464856865] [17073] [1;32m INFO [1;37mRPI [1;34mpisp.cpp:1483 [0mSensor: /base/axi/pcie@1000120000/rp1/i2c@80000/imx477@1a - Selected sensor format: 2028x1080-SBGGR12_1X12/RAW - Selected CFE format: 2028x1080-PC1B/RAW
+[0:40:40.469216543] [17051] [1;32m INFO [1;37mCamera [1;34mcamera.cpp:1215 [0mconfiguring streams: (0) 640x480-XBGR8888/sRGB (1) 2028x1520-BGGR_PISP_COMP1/RAW
+[0:40:40.469358507] [17073] [1;32m INFO [1;37mRPI [1;34mpisp.cpp:1483 [0mSensor: /base/axi/pcie@1000120000/rp1/i2c@80000/imx477@1a - Selected sensor format: 2028x1520-SBGGR12_1X12/RAW - Selected CFE format: 2028x1520-PC1B/RAW
+[0:40:40.474378134] [17051] [1;32m INFO [1;37mCamera [1;34mcamera.cpp:1215 [0mconfiguring streams: (0) 640x480-XBGR8888/sRGB (1) 4056x3040-BGGR_PISP_COMP1/RAW
+[0:40:40.474518561] [17073] [1;32m INFO [1;37mRPI [1;34mpisp.cpp:1483 [0mSensor: /base/axi/pcie@1000120000/rp1/i2c@80000/imx477@1a - Selected sensor format: 4056x3040-SBGGR12_1X12/RAW - Selected CFE format: 4056x3040-PC1B/RAW
+Scanning for USB Cameras...
+Detected cameras: {'pi_0': {'friendly_name': 'PiCamera 0 (imx477)', 'type': 'pi', 'path': 0, 'max_width': 4608, 'max_height': 2592, 'resolutions': ['1332x990', '2028x1080', '2028x1520', '4056x3040'], 'has_autofocus': False}}
+INFO:     Application startup complete.
+Connected to MQTT Broker: 10.10.10.30:1883
+[WS] Broadcasting message: {'type': 'mqtt_log', 'message': 'Connected to MQTT Broker: 10.10.10.30:1883'} to 0 clients
+Message Published (mid=1)
+[WS] Broadcasting message: {'type': 'mqtt_log', 'message': 'Message Published (mid=1)'} to 0 clients
+--- DETECTING CAMERAS ---
+Detected cameras: {'pi_0': {'friendly_name': 'PiCamera 0 (imx477)', 'has_autofocus': False, 'max_height': 2592, 'max_width': 4608, 'mqtt_enabled': True, 'path': 0, 'resolutions': ['1332x990', '2028x1080', '2028x1520', '4056x3040'], 'shutter_speed_range': [30, 1000], 'type': 'pi'}}
+INFO:     10.10.10.193:60697 - "GET /api/mqtt_status HTTP/1.1" 200 OK
+Subscribed to topic: capture/trigger (mid=2)
+[WS] Broadcasting message: {'type': 'mqtt_log', 'message': 'Subscribed to topic: capture/trigger (mid=2)'} to 0 clients
+[WS] New connection attempt from Address(host='10.10.10.193', port=60698)
+INFO:     10.10.10.193:60698 - "WebSocket /ws" [accepted]
+[WS] Connection accepted. Active connections: 1
+INFO:     connection open
+[WS] New connection attempt from Address(host='10.10.10.193', port=60699)
+INFO:     10.10.10.193:60699 - "WebSocket /ws" [accepted]
+[WS] Connection accepted. Active connections: 2
+INFO:     connection open
+INFO:     10.10.10.193:60697 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60697 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60697 - "GET /api/mqtt_status HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60697 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60697 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60697 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60696 - "GET /api/mqtt_status HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60696 - "GET /api/system_stats HTTP/1.1" 200 OK
+Received: capture/trigger -> {"prefix":"MQTT_TEST_8"}
+[WS] Broadcasting message: {'type': 'mqtt_log', 'message': 'Received: capture/trigger -> {"prefix":"MQTT_TEST_8"}'} to 2 clients
+[MQTT] Global context. Capturing all.
+Triggering capture via MQTT with data: {'prefix': 'MQTT_TEST_8'} -> Context: None
+[MQTT] Evaluating cameras from available_cameras...
+[MQTT] Checking pi_0: cfg={'friendly_name': 'PiCamera 0 (imx477)', 'has_autofocus': False, 'max_height': 2592, 'max_width': 4608, 'mqtt_enabled': True, 'path': 0, 'resolutions': ['1332x990', '2028x1080', '2028x1520', '4056x3040'], 'shutter_speed_range': [30, 1000], 'type': 'pi'}, enabled=True
+[MQTT] No active cameras. Initializing from available_cameras...
+[0:40:53.299426892] [17051] [1;32m INFO [1;37mCamera [1;34mcamera_manager.cpp:330 [0mlibcamera v0.5.2+99-bfd68f78
+[0:40:53.307092259] [17193] [1;32m INFO [1;37mRPI [1;34mpisp.cpp:720 [0mlibpisp version v1.2.1 981977ff21f3 29-04-2025 (14:13:50)
+[0:40:53.310077409] [17193] [1;32m INFO [1;37mIPAProxy [1;34mipa_proxy.cpp:180 [0mUsing tuning file /usr/share/libcamera/ipa/rpi/pisp/imx477.json
+[0:40:53.318479336] [17193] [1;32m INFO [1;37mCamera [1;34mcamera_manager.cpp:220 [0mAdding camera '/base/axi/pcie@1000120000/rp1/i2c@80000/imx477@1a' for pipeline handler rpi/pisp
+[0:40:53.318519207] [17193] [1;32m INFO [1;37mRPI [1;34mpisp.cpp:1179 [0mRegistered camera /base/axi/pcie@1000120000/rp1/i2c@80000/imx477@1a to CFE device /dev/media0 and ISP device /dev/media2 using PiSP variant BCM2712_C0
+[MQTT] !!! ENTERING CAPTURE SEQUENCE !!!
+[MQTT] Starting capture sequence for cameras: ['pi_0']
+[MQTT] Capturing from pi_0 to /home/pi/dataset_collector/captures/images/default/MQTT_TEST_8_1280x720_pi_0_1772307707904.jpg (Res: 1280x720)...
+[0:40:53.321579746] [17051] [1;32m INFO [1;37mCamera [1;34mcamera.cpp:1215 [0mconfiguring streams: (0) 1280x720-XBGR8888/Rec709/Rec709/None/Full (1) 2028x1080-BGGR_PISP_COMP1/RAW
+[0:40:53.321715414] [17193] [1;32m INFO [1;37mRPI [1;34mpisp.cpp:1483 [0mSensor: /base/axi/pcie@1000120000/rp1/i2c@80000/imx477@1a - Selected sensor format: 2028x1080-SBGGR12_1X12/RAW - Selected CFE format: 2028x1080-PC1B/RAW
+[PiCamera 0] Camera started.
+[WS] Broadcasting message: {'type': 'new_file', 'filename': 'images/default/MQTT_TEST_8_1280x720_pi_0_1772307707904.jpg', 'camera_path': 'pi_0', 'source': 'MQTT'} to 2 clients
+[MQTT] Capture sequence complete. Total files saved: 1
+[MQTT] !!! CHECKING SFTP LOGIC !!!
+[MQTT] SFTP Debug: ConfigLoaded=True, Enabled=False, Captured=1, PendingBefore=0
+[MQTT] Reverting all camera settings...
+Published to dataset_collector/pi5/capture/finished
+Message Published (mid=3)
+INFO:     10.10.10.193:60696 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60697 - "GET /api/mqtt_status HTTP/1.1" 200 OK
+[WS] Broadcasting message: {'type': 'mqtt_log', 'message': 'Published to dataset_collector/pi5/capture/finished'} to 2 clients
+[WS] Broadcasting message: {'type': 'mqtt_log', 'message': 'Message Published (mid=3)'} to 2 clients
+INFO:     10.10.10.193:60696 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60696 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60696 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60697 - "GET /api/mqtt_status HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60697 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60697 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60697 - "GET /api/mqtt_status HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60697 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60697 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60697 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60710 - "GET /api/mqtt_status HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60710 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60710 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60710 - "GET /api/mqtt_status HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60710 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60710 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60710 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60710 - "GET /api/mqtt_status HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60710 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60710 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60710 - "GET /api/mqtt_status HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60710 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60710 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60710 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60714 - "GET /api/mqtt_status HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60714 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60714 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60714 - "GET /api/mqtt_status HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60714 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60714 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60714 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60716 - "GET /api/mqtt_status HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60716 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60716 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60716 - "GET /api/mqtt_status HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60716 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60716 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60716 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60728 - "GET /api/mqtt_status HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60728 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60728 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60728 - "GET /api/mqtt_status HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60728 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60728 - "GET / HTTP/1.1" 200 OK
+[WS] Client disconnected: Address(host='10.10.10.193', port=60699)
+INFO:     connection closed
+[WS] Client disconnected: Address(host='10.10.10.193', port=60698)
+INFO:     connection closed
+INFO:     10.10.10.193:60728 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60729 - "GET /api/mqtt_status HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60733 - "GET /api/cameras HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60731 - "GET /api/captures HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60732 - "GET /api/mqtt_config HTTP/1.1" 200 OK
+[WS] New connection attempt from Address(host='10.10.10.193', port=60730)
+INFO:     10.10.10.193:60730 - "WebSocket /ws" [accepted]
+[WS] Connection accepted. Active connections: 1
+INFO:     connection open
+INFO:     10.10.10.193:60728 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60729 - "GET /api/cameras HTTP/1.1" 200 OK
+[WS] New connection attempt from Address(host='10.10.10.193', port=60735)
+INFO:     10.10.10.193:60735 - "WebSocket /ws" [accepted]
+[WS] Connection accepted. Active connections: 2
+INFO:     connection open
+INFO:     10.10.10.193:60729 - "GET /captures/images/default/MQTT_TEST_8_1280x720_pi_0_1772307707904.jpg HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60729 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60729 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60729 - "GET /api/resolutions?camera_path=pi_0 HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60728 - "GET /api/mqtt_status HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60734 - "GET /api/captures HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60728 - "GET /api/camera_info/pi_0 HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60728 - "GET /api/shutter_speed_range/pi_0 HTTP/1.1" 200 OK
+Active camera context updated to: pi_0 (Single Camera: pi_0)
+INFO:     10.10.10.193:60728 - "POST /api/set_active_camera HTTP/1.1" 200 OK
+[PiCamera 0] Stopping camera.
+[PiCamera 0] Adjusting preview from 1332x990 to 1332x990 to match AR of 1332x990
+[0:42:02.141701495] [17198] [1;32m INFO [1;37mCamera [1;34mcamera.cpp:1215 [0mconfiguring streams: (0) 1332x990-XBGR8888/Rec709/Rec709/None/Full (1) 2028x1520-BGGR_PISP_COMP1/RAW
+[0:42:02.149238673] [17193] [1;32m INFO [1;37mRPI [1;34mpisp.cpp:1483 [0mSensor: /base/axi/pcie@1000120000/rp1/i2c@80000/imx477@1a - Selected sensor format: 2028x1520-SBGGR12_1X12/RAW - Selected CFE format: 2028x1520-PC1B/RAW
+[PiCamera 0] Camera started.
+INFO:     10.10.10.193:60734 - "GET /video_feed?camera_path=pi_0&resolution=1332x990&shutter_speed=Auto&iso=0 HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60728 - "GET /grid HTTP/1.1" 200 OK
+[WS] Client disconnected: Address(host='10.10.10.193', port=60730)
+[WS] Client disconnected: Address(host='10.10.10.193', port=60735)
+INFO:     connection closed
+INFO:     connection closed
+INFO:     10.10.10.193:60728 - "GET /api/system_stats HTTP/1.1" 200 OK
+Active camera context updated to: None (Multi-Camera (All))
+INFO:     10.10.10.193:60729 - "POST /api/set_active_camera HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60738 - "GET /api/mqtt_status HTTP/1.1" 200 OK
+[WS] New connection attempt from Address(host='10.10.10.193', port=60737)
+INFO:     10.10.10.193:60737 - "WebSocket /ws" [accepted]
+[WS] Connection accepted. Active connections: 1
+INFO:     10.10.10.193:60728 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60739 - "GET /api/cameras?t=1772307777393 HTTP/1.1" 200 OK
+INFO:     connection open
+[WS] New connection attempt from Address(host='10.10.10.193', port=60741)
+INFO:     10.10.10.193:60741 - "WebSocket /ws" [accepted]
+[WS] Connection accepted. Active connections: 2
+INFO:     connection open
+INFO:     10.10.10.193:60739 - "GET /api/resolutions?camera_path=pi_0 HTTP/1.1" 200 OK
+[PiCamera 0] Stopping camera.
+[PiCamera 0] Adjusting preview from 1280x720 to 1280x720 to match AR of 1280x720
+[0:42:03.214988735] [17198] [1;32m INFO [1;37mCamera [1;34mcamera.cpp:1215 [0mconfiguring streams: (0) 1280x720-XBGR8888/Rec709/Rec709/None/Full (1) 2028x1080-BGGR_PISP_COMP1/RAW
+[0:42:03.220794087] [17193] [1;32m INFO [1;37mRPI [1;34mpisp.cpp:1483 [0mSensor: /base/axi/pcie@1000120000/rp1/i2c@80000/imx477@1a - Selected sensor format: 2028x1080-SBGGR12_1X12/RAW - Selected CFE format: 2028x1080-PC1B/RAW
+[PiCamera 0] Camera started.
+INFO:     10.10.10.193:60739 - "GET /video_feed?camera_path=pi_0 HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60728 - "GET /api/shutter_speed_range/pi_0 HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60728 - "GET /api/camera_info/pi_0 HTTP/1.1" 200 OK
+[PiCamera 0] Stopping camera.
+[PiCamera 0] Adjusting preview from 1332x990 to 1332x990 to match AR of 1332x990
+[0:42:03.837470589] [17198] [1;32m INFO [1;37mCamera [1;34mcamera.cpp:1215 [0mconfiguring streams: (0) 1332x990-XBGR8888/Rec709/Rec709/None/Full (1) 2028x1520-BGGR_PISP_COMP1/RAW
+[0:42:03.842501677] [17193] [1;32m INFO [1;37mRPI [1;34mpisp.cpp:1483 [0mSensor: /base/axi/pcie@1000120000/rp1/i2c@80000/imx477@1a - Selected sensor format: 2028x1520-SBGGR12_1X12/RAW - Selected CFE format: 2028x1520-PC1B/RAW
+[PiCamera 0] Camera started.
+INFO:     10.10.10.193:60728 - "GET /video_feed?camera_path=pi_0&resolution=1332x990&shutter_speed=Auto&t=1772307778142 HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60738 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60738 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60738 - "GET /api/mqtt_status HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60738 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60738 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60738 - "GET / HTTP/1.1" 200 OK
+[WS] Client disconnected: Address(host='10.10.10.193', port=60737)
+[WS] Client disconnected: Address(host='10.10.10.193', port=60741)
+INFO:     connection closed
+INFO:     connection closed
+INFO:     10.10.10.193:60738 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60740 - "GET /api/mqtt_status HTTP/1.1" 200 OK
+[WS] New connection attempt from Address(host='10.10.10.193', port=60743)
+INFO:     10.10.10.193:60743 - "WebSocket /ws" [accepted]
+[WS] Connection accepted. Active connections: 1
+INFO:     10.10.10.193:60744 - "GET /api/cameras HTTP/1.1" 200 OK
+INFO:     connection open
+INFO:     10.10.10.193:60745 - "GET /api/captures HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60746 - "GET /api/mqtt_config HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60747 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60740 - "GET /api/cameras HTTP/1.1" 200 OK
+[WS] New connection attempt from Address(host='10.10.10.193', port=60748)
+INFO:     10.10.10.193:60748 - "WebSocket /ws" [accepted]
+[WS] Connection accepted. Active connections: 2
+INFO:     connection open
+INFO:     10.10.10.193:60740 - "GET /captures/images/default/MQTT_TEST_8_1280x720_pi_0_1772307707904.jpg HTTP/1.1" 304 Not Modified
+INFO:     10.10.10.193:60740 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60740 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60740 - "GET /api/mqtt_status HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60747 - "GET /api/captures HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60747 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60747 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60747 - "GET /api/system_stats HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60740 - "GET /api/mqtt_status HTTP/1.1" 200 OK
+INFO:     10.10.10.193:60747 - "GET /api/captures HTTP/1.1" 200 OK
