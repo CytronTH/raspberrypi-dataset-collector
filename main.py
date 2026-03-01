@@ -438,6 +438,7 @@ async def perform_global_capture(request: CaptureAllRequest, source: str = "Unkn
                  print(f"[{source}] Camera {camera_path} not active. Skipping.", file=sys.stderr)
                  continue
 
+            t_start_cam = time.time()
             camera = active_cameras[camera_path]
             cam_config = available_cameras.get(camera_path, {})
             
@@ -497,12 +498,13 @@ async def perform_global_capture(request: CaptureAllRequest, source: str = "Unkn
 
 
             # Perform Capture
-            print(f"[{source}] Capturing from {camera_path} to {save_path} (Res: {width}x{height})...", file=sys.stderr)
+            print(f"[{source}] Capturing from {camera_path} to {save_path} (Res: {width}x{height})... setup took {time.time()-t_start_cam:.3f}s", file=sys.stderr)
+            t_cap_start = time.time()
             try:
                 # Ensure camera is running
                 if not camera.is_running:
                      camera.start()
-                     time.sleep(2) # Warmup
+                     # time.sleep(2) # Warmup (removed as it blocks and makes capture slow)
 
                 if isinstance(camera, PiCamera):
                      if capture_req.autofocus:
@@ -521,6 +523,9 @@ async def perform_global_capture(request: CaptureAllRequest, source: str = "Unkn
                      # USB Camera
                      camera.capture_to_file(str(save_path), width=width, height=height)
 
+                print(f"[{source}] Core capture_to_file took {time.time()-t_cap_start:.3f}s", file=sys.stderr)
+                t_post_cap = time.time()
+
                 captured_files.append(str(save_path))
                 capture_count += 1
                 
@@ -538,11 +543,11 @@ async def perform_global_capture(request: CaptureAllRequest, source: str = "Unkn
                           except Exception as e:
                               print(f"Failed to add EXIF: {e}", file=sys.stderr)
 
-                # --- OVERLAY SETTINGS LOGIC ---
                 try:
                     # Reload config to ensure we have latest overlay setting
                     current_conf = load_config()
                     if current_conf.get('overlay_settings', False):
+                        t_overlay = time.time()
                         print(f"[{source}] Applying overlay to {save_path}...", file=sys.stderr)
                         
                         # Open Image
@@ -591,7 +596,7 @@ async def perform_global_capture(request: CaptureAllRequest, source: str = "Unkn
                             
                             # Save back
                             img.save(str(save_path))
-                            print(f"[{source}] Overlay applied.", file=sys.stderr)
+                            print(f"[{source}] Overlay applied in {time.time()-t_overlay:.3f}s.", file=sys.stderr)
 
                 except Exception as e:
                     print(f"[{source}] Failed to apply overlay: {e}", file=sys.stderr)
@@ -902,25 +907,46 @@ async def get_camera_info(camera_path: str):
         if cam_info.get('type') == 'usb':
              active_cameras[camera_path] = USBCamera(path=cam_info['path'], friendly_name=cam_info['friendly_name'])
         elif cam_info.get('type') == 'pi':
-            active_cameras[camera_path] = PiCamera(
+            cam_obj = PiCamera(
                 camera_id=cam_info['path'],
                 friendly_name=cam_info['friendly_name'],
                 max_width=cam_info.get('max_width'),
                 max_height=cam_info.get('max_height')
             )
+            # Seed camera with saved config values so hardware applies them when started
+            if cam_info.get('autofocus_enabled') is not None:
+                cam_obj._autofocus_enabled = cam_info['autofocus_enabled']
+            if cam_info.get('iso') is not None:
+                cam_obj._iso = cam_info['iso']
+            active_cameras[camera_path] = cam_obj
     
     camera = active_cameras.get(camera_path)
+
+    config = load_config()
+    defaults = config.get('defaults', {}) if config else {}
+    prefix = defaults.get('prefix', 'IMG')
+
+    # Prefer saved config values for autofocus/iso; camera runtime state is only the default
+    saved_autofocus = cam_info.get('autofocus_enabled')
+    saved_iso = cam_info.get('iso')
+
+    autofocus_enabled = saved_autofocus if saved_autofocus is not None else (camera._autofocus_enabled if camera and isinstance(camera, PiCamera) else None)
+    iso = saved_iso if saved_iso is not None else (camera._iso if camera and isinstance(camera, PiCamera) else None)
 
     return {
         "camera_path": camera_path,
         "friendly_name": cam_info.get('friendly_name'),
         "type": cam_info.get('type'),
         "has_autofocus": cam_info.get('has_autofocus', False),
-        "autofocus_enabled": camera._autofocus_enabled if camera and isinstance(camera, PiCamera) else None,
-        "iso": camera._iso if camera and isinstance(camera, PiCamera) else None,
+        "autofocus_enabled": autofocus_enabled,
+        "iso": iso,
         "manual_focus_value": camera._manual_focus_value if camera and isinstance(camera, PiCamera) else None,
         "current_lens_position": camera.get_lens_position() if camera and isinstance(camera, PiCamera) else None,
-        "mqtt_enabled": cam_info.get('mqtt_enabled', True)
+        "mqtt_enabled": cam_info.get('mqtt_enabled', True),
+        "resolution": cam_info.get('resolution'),
+        "shutter_speed": cam_info.get('shutter_speed'),
+        "prefix": prefix,
+        "subfolder": cam_info.get('subfolder', 'default')
     }
 
 @app.get("/api/cameras")
@@ -998,8 +1024,10 @@ class SaveCameraSettingsRequest(BaseModel):
     shutter_speed: str | None = None
     iso: int | None = None
     autofocus: bool | None = None
+    manual_focus: float | None = None
     prefix: str | None = None
     mqtt_enabled: bool | None = None
+    subfolder: str | None = None
 
 @app.post("/api/save_camera_settings")
 async def save_camera_settings(request: SaveCameraSettingsRequest):
@@ -1038,7 +1066,9 @@ async def save_camera_settings(request: SaveCameraSettingsRequest):
                  'shutter_speed': request.shutter_speed,
                  'iso': request.iso,
                  'autofocus_enabled': request.autofocus,
-                 'mqtt_enabled': request.mqtt_enabled
+                 'manual_focus_value': request.manual_focus,
+                 'mqtt_enabled': request.mqtt_enabled,
+                 'subfolder': request.subfolder
              })
              # Filter out None values to keep config clean
              full_config['cameras'][request.camera_path] = {k: v for k, v in full_config['cameras'][request.camera_path].items() if v is not None}
@@ -1501,12 +1531,20 @@ async def video_feed(camera_path: str, resolution: str = "1280x720", shutter_spe
             if cam_info.get('type') == 'usb':
                 active_cameras[camera_path] = USBCamera(path=cam_info['path'], friendly_name=cam_info['friendly_name'])
             elif cam_info.get('type') == 'pi':
-                active_cameras[camera_path] = PiCamera(
+                cam_obj = PiCamera(
                     camera_id=cam_info['path'],
                     friendly_name=cam_info['friendly_name'],
                     max_width=cam_info['max_width'],
                     max_height=cam_info['max_height']
                 )
+                # Seed with saved settings from config BEFORE start() so hardware applies them
+                if cam_info.get('autofocus_enabled') is not None:
+                    cam_obj._autofocus_enabled = cam_info['autofocus_enabled']
+                if cam_info.get('iso') is not None:
+                    cam_obj._iso = cam_info['iso']
+                if cam_info.get('manual_focus_value') is not None:
+                    cam_obj._manual_focus_value = cam_info['manual_focus_value']
+                active_cameras[camera_path] = cam_obj
         
         camera = active_cameras[camera_path]
         # Ensure camera is started before streaming

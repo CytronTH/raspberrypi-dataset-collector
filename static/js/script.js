@@ -406,14 +406,29 @@ document.addEventListener('DOMContentLoaded', () => {
                 const cameraInfo = await cameraInfoResponse.json();
 
                 if (cameraInfo.type === 'pi' && cameraInfo.has_autofocus) {
+                    const savedAF = cameraInfo.autofocus_enabled !== false; // default to true if not saved
                     if (autofocusCheckbox) {
                         autofocusCheckbox.disabled = false;
-                        autofocusCheckbox.checked = true;
+                        autofocusCheckbox.checked = savedAF;
                     }
-                    if (manualFocusSlider) manualFocusSlider.disabled = true;
+                    if (manualFocusSlider) manualFocusSlider.disabled = savedAF;
 
                     const focusContainer = document.getElementById('focus-adjustment-container');
-                    if (focusContainer) focusContainer.classList.add('opacity-50', 'pointer-events-none');
+                    if (focusContainer) {
+                        if (savedAF) {
+                            focusContainer.classList.add('opacity-50', 'pointer-events-none');
+                        } else {
+                            focusContainer.classList.remove('opacity-50', 'pointer-events-none');
+                        }
+                    }
+
+                    // Restore manual focus slider from saved value
+                    if (!savedAF && cameraInfo.manual_focus_value !== undefined && cameraInfo.manual_focus_value !== null) {
+                        const sliderVal = Math.round(cameraInfo.manual_focus_value * 100);
+                        if (manualFocusSlider) manualFocusSlider.value = sliderVal;
+                        const manualFocusValueSpan = document.getElementById('manual-focus-value');
+                        if (manualFocusValueSpan) manualFocusValueSpan.textContent = cameraInfo.manual_focus_value.toFixed(2);
+                    }
                 } else {
                     if (autofocusCheckbox) {
                         autofocusCheckbox.disabled = true;
@@ -442,7 +457,29 @@ document.addEventListener('DOMContentLoaded', () => {
                     mqttTriggerCheckbox.checked = cameraInfo.mqtt_enabled !== false; // Default to true if undefined
                 }
 
+                if (prefixInput && cameraInfo.prefix) {
+                    prefixInput.value = cameraInfo.prefix;
+                }
+
+                if (subfolderInput && cameraInfo.subfolder) {
+                    subfolderInput.value = cameraInfo.subfolder;
+                    // Update the visible path display
+                    const savePathDisplay = document.getElementById('current-save-path');
+                    if (savePathDisplay) {
+                        savePathDisplay.textContent = '/' + cameraInfo.subfolder;
+                    }
+                }
+
+                if (resolutionSelect && cameraInfo.resolution) {
+                    // Make sure the option exists, if not, it will just default or ignore
+                    resolutionSelect.value = cameraInfo.resolution;
+                }
+
                 await updateShutterSpeedOptions(selectedCameraPath);
+
+                if (shutterSpeedSelect && cameraInfo.shutter_speed) {
+                    shutterSpeedSelect.value = cameraInfo.shutter_speed;
+                }
                 updateCameraFeed();
 
                 // Set Active Camera Context
@@ -530,6 +567,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const autofocus = autofocusCheckbox ? autofocusCheckbox.checked : null;
             const prefix = prefixInput ? prefixInput.value : null;
             const mqttEnabled = mqttTriggerCheckbox ? mqttTriggerCheckbox.checked : null;
+            // Capture current manual focus value (0.0 - 1.0 range sent to API)
+            const manualFocusRaw = manualFocusSlider ? parseFloat((manualFocusSlider.value / 100).toFixed(2)) : null;
 
             saveSettingsBtn.disabled = true;
             saveSettingsBtn.textContent = "Saving...";
@@ -543,8 +582,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     shutter_speed: shutterSpeed,
                     iso: iso,
                     autofocus: autofocus,
+                    manual_focus: manualFocusRaw,
                     prefix: prefix,
-                    mqtt_enabled: mqttEnabled
+                    mqtt_enabled: mqttEnabled,
+                    subfolder: subfolderInput ? subfolderInput.value : null
                 }),
             })
                 .then(response => response.json())

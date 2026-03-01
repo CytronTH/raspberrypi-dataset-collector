@@ -383,7 +383,7 @@ class PiCamera(CameraBase):
 
         # Check if we need to switch resolution for this capture
         if width and height and (width != self.width or height != self.height):
-            print(f"[PiCamera] Switching to Still Mode: {width}x{height}", file=sys.stderr)
+            print(f"[PiCamera] Switching to Still Mode: {width}x{height} (current is {self.width}x{self.height})", file=sys.stderr)
             self.stop() # Release video buffers!
             
             # Create a STILL configuration (usually uses fewer buffers than video)
